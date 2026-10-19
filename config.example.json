@@ -1,0 +1,55 @@
+{
+  "version": "0.1.0",
+  "active_provider": "openai",
+  "providers": {
+    "openai": {
+      "name": "openai",
+      "base_url": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "default_model": "gpt-4o-mini",
+      "timeout_seconds": 120.0,
+      "max_retries": 2
+    },
+    "ollama": {
+      "name": "ollama",
+      "base_url": "http://localhost:11434/v1",
+      "api_key_env": "OLLAMA_API_KEY",
+      "default_model": "llama3.2",
+      "timeout_seconds": 180.0,
+      "max_retries": 1
+    },
+    "openrouter": {
+      "name": "openrouter",
+      "base_url": "https://openrouter.ai/api/v1",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "default_model": "openai/gpt-4o-mini",
+      "timeout_seconds": 120.0,
+      "max_retries": 2
+    },
+    "groq": {
+      "name": "groq",
+      "base_url": "https://api.groq.com/openai/v1",
+      "api_key_env": "GROQ_API_KEY",
+      "default_model": "llama-3.3-70b-versatile",
+      "timeout_seconds": 60.0,
+      "max_retries": 2
+    }
+  },
+  "permissions": {
+    "read_files": "allow",
+    "create_files": "ask",
+    "modify_files": "ask",
+    "delete_files": "ask",
+    "run_commands": "ask",
+    "git_commit": "ask",
+    "git_push": "ask",
+    "deployment": "ask"
+  },
+  "max_agent_steps": 25,
+  "max_file_size_bytes": 512000,
+  "max_command_output_chars": 30000,
+  "command_timeout_seconds": 60.0,
+  "context_max_files": 40,
+  "context_max_chars": 80000,
+  "session_history": true
+}

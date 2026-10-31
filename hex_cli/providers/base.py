@@ -54,161 +54,37 @@ class ProviderResponse:
 
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
-    {
-        "type": "function",
-        "function": {
-            "name": "list_files",
-            "description": "List files and directories under a relative path inside the project.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Relative path (default '.')", "default": "."},
-                    "recursive": {"type": "boolean", "description": "Recurse into subdirectories", "default": False},
-                },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_file",
-            "description": "Read the contents of a text file inside the project.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Relative file path"},
-                    "offset": {"type": "integer", "description": "1-based start line (optional)"},
-                    "limit": {"type": "integer", "description": "Max lines to return (optional)"},
-                },
-                "required": ["path"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_text",
-            "description": "Search for a text pattern across project source files.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "pattern": {"type": "string", "description": "Text or regex pattern"},
-                    "path": {"type": "string", "description": "Relative directory to search (default '.')", "default": "."},
-                    "max_results": {"type": "integer", "description": "Maximum matches to return", "default": 30},
-                },
-                "required": ["pattern"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "write_file",
-            "description": "Create a new file or overwrite an existing one. Requires user approval.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Relative file path"},
-                    "content": {"type": "string", "description": "Full file content"},
-                },
-                "required": ["path", "content"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "edit_file",
-            "description": "Apply a search-and-replace edit to an existing file. Requires user approval.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Relative file path"},
-                    "old_string": {"type": "string", "description": "Exact text to find"},
-                    "new_string": {"type": "string", "description": "Replacement text"},
-                    "replace_all": {"type": "boolean", "description": "Replace every occurrence", "default": False},
-                },
-                "required": ["path", "old_string", "new_string"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "create_directory",
-            "description": "Create a directory (and parents) inside the project. Requires approval.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Relative directory path"},
-                },
-                "required": ["path"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_command",
-            "description": "Run a shell command inside the project directory. Requires user approval.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "command": {"type": "string", "description": "Shell command to execute"},
-                    "timeout": {"type": "number", "description": "Timeout in seconds (optional)"},
-                },
-                "required": ["command"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "git_status",
-            "description": "Show git status for the current repository.",
-            "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "git_diff",
-            "description": "Show git diff (unstaged by default, or staged).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "staged": {"type": "boolean", "description": "Show staged diff", "default": False},
-                },
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "run_tests",
-            "description": "Run the project's test suite (pytest by default).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "args": {"type": "string", "description": "Extra arguments for the test runner", "default": ""},
-                },
-            },
-        },
-    },
+    {"type": "function", "function": {"name": "list_files", "description": "List files and directories under a relative path inside the project.", "parameters": {"type": "object", "properties": {"path": {"type": "string", "default": "."}, "recursive": {"type": "boolean", "default": False}}}}},
+    {"type": "function", "function": {"name": "read_file", "description": "Read the contents of a text file inside the project.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "offset": {"type": "integer"}, "limit": {"type": "integer"}}, "required": ["path"]}}},
+    {"type": "function", "function": {"name": "search_text", "description": "Search for a text pattern across project source files.", "parameters": {"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string", "default": "."}, "max_results": {"type": "integer", "default": 30}}, "required": ["pattern"]}}},
+    {"type": "function", "function": {"name": "write_file", "description": "Create or overwrite a file. Requires approval.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "content": {"type": "string"}}, "required": ["path", "content"]}}},
+    {"type": "function", "function": {"name": "edit_file", "description": "Search-and-replace edit. Requires approval.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "old_string": {"type": "string"}, "new_string": {"type": "string"}, "replace_all": {"type": "boolean", "default": False}}, "required": ["path", "old_string", "new_string"]}}},
+    {"type": "function", "function": {"name": "create_directory", "description": "Create a directory. Requires approval.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}}},
+    {"type": "function", "function": {"name": "run_command", "description": "Run a shell command. Requires approval.", "parameters": {"type": "object", "properties": {"command": {"type": "string"}, "timeout": {"type": "number"}}, "required": ["command"]}}},
+    {"type": "function", "function": {"name": "git_status", "description": "Show git status.", "parameters": {"type": "object", "properties": {}}}},
+    {"type": "function", "function": {"name": "git_diff", "description": "Show git diff.", "parameters": {"type": "object", "properties": {"staged": {"type": "boolean", "default": False}}}}},
+    {"type": "function", "function": {"name": "run_tests", "description": "Run project tests.", "parameters": {"type": "object", "properties": {"args": {"type": "string", "default": ""}}}}},
 ]
 
 
 class BaseProvider:
     """Thin wrapper around the OpenAI-compatible Chat Completions API."""
 
-    def __init__(self, config: ProviderConfig, model: str | None = None):
+    def __init__(
+        self,
+        config: ProviderConfig,
+        model: str | None = None,
+        *,
+        require_key: bool = True,
+    ):
         self.config = config
         self.model = model or config.default_model
         api_key = get_api_key(config)
-        if not api_key and config.name != "ollama":
+        self._has_key = bool(api_key) or config.name in ("ollama", "custom")
+        if require_key and not self._has_key:
             raise ValueError(
-                f"API key not found. Set the environment variable {config.api_key_env} "
-                f"or add it to a .env file. See `hex doctor` for diagnostics."
+                f"API key not found. Use /connect in the TUI, set {config.api_key_env}, "
+                "or add it to ~/.hex/credentials.json. See `hex doctor`."
             )
         self._client = OpenAI(
             api_key=api_key or "ollama",
@@ -247,13 +123,11 @@ class BaseProvider:
                     time.sleep(1)
                 else:
                     raise ProviderError(
-                        f"Request timed out after {self.config.timeout_seconds}s. "
-                        "Try increasing the timeout in config or using a faster model."
+                        f"Request timed out after {self.config.timeout_seconds}s."
                     ) from e
             except APIConnectionError as e:
                 raise ProviderError(
-                    f"Cannot reach provider at {self.config.base_url}. "
-                    "Check your network or that Ollama is running (if using local models)."
+                    f"Cannot reach provider at {self.config.base_url}."
                 ) from e
             except APIStatusError as e:
                 status = e.status_code
@@ -264,17 +138,13 @@ class BaseProvider:
                     pass
                 if status == 401:
                     raise ProviderError(
-                        f"Authentication failed (401). Check that {self.config.api_key_env} "
-                        "is set to a valid key."
+                        f"Authentication failed (401). Check {self.config.api_key_env}."
                     ) from e
                 if status == 403:
-                    raise ProviderError(
-                        "Access forbidden (403). Your key may lack permission for this model."
-                    ) from e
+                    raise ProviderError("Access forbidden (403).") from e
                 if status == 404:
                     raise ProviderError(
-                        f"Model or endpoint not found (404). Model={self.model!r}, "
-                        f"base_url={self.config.base_url}"
+                        f"Model or endpoint not found (404). Model={self.model!r}"
                     ) from e
                 if status == 429:
                     last_error = e
@@ -323,5 +193,10 @@ class ProviderError(Exception):
     pass
 
 
-def create_provider(config: ProviderConfig, model: str | None = None) -> BaseProvider:
-    return BaseProvider(config, model=model)
+def create_provider(
+    config: ProviderConfig,
+    model: str | None = None,
+    *,
+    require_key: bool = True,
+) -> BaseProvider:
+    return BaseProvider(config, model=model, require_key=require_key)

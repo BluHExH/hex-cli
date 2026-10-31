@@ -52,6 +52,7 @@ class ChangeTracker:
     def __init__(self, project_root: Path):
         self.root = project_root.resolve()
         self.records: list[ChangeRecord] = []
+        self._redo_stack: list[ChangeRecord] = []
         # Snapshots for undo: path -> original content before first agent touch
         self._originals: dict[str, str | None] = {}
 
@@ -67,6 +68,7 @@ class ChangeTracker:
             self._originals[rel] = before
         rec = ChangeRecord(path=rel, action=action, before=before, after=after)
         self.records.append(rec)
+        self._redo_stack.clear()
         return rec
 
     def summary(self) -> dict[str, Any]:
@@ -118,15 +120,57 @@ class ChangeTracker:
             return {"ok": False, "error": "Path escapes project root"}
 
         try:
+            # Capture current disk content for redo
+            current = None
+            if target.is_file():
+                try:
+                    current = target.read_text(encoding="utf-8")
+                except OSError:
+                    current = None
             if rec.action == "create":
                 if target.is_file():
                     target.unlink()
+                self._redo_stack.append(ChangeRecord(path=rec.path, action=rec.action, before=rec.before, after=rec.after))
                 return {"ok": True, "restored": rec.path, "action": "deleted_created_file"}
             if rec.before is None:
                 return {"ok": False, "error": "No before-content to restore"}
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(rec.before, encoding="utf-8")
+            self._redo_stack.append(ChangeRecord(path=rec.path, action=rec.action, before=current, after=rec.before))
             return {"ok": True, "restored": rec.path, "action": "restored_content"}
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
+
+    def redo_last(self) -> dict[str, Any]:
+        """Re-apply the last undone change (session-local, not git reset)."""
+        if not self._redo_stack:
+            return {"ok": False, "error": "Nothing to redo"}
+        rec = self._redo_stack.pop()
+        target = (self.root / rec.path).resolve()
+        try:
+            target.relative_to(self.root)
+        except ValueError:
+            return {"ok": False, "error": "Path escapes project root"}
+        try:
+            if rec.action == "create" and rec.after is not None:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(rec.after, encoding="utf-8")
+                self.records.append(ChangeRecord(path=rec.path, action="create", before=None, after=rec.after))
+                return {"ok": True, "path": rec.path, "action": "recreated"}
+            if rec.before is not None:
+                # rec.before here is content at undo time (post-agent); re-apply agent result
+                # In undo we stored before=current(after agent), after=rec.before(original)
+                # So redo writes rec.before from redo stack which was current after agent
+                content = rec.before if rec.action != "create" else rec.after
+                if content is None and rec.after is not None:
+                    content = rec.after
+                if content is None:
+                    return {"ok": False, "error": "No content to redo"}
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+                self.records.append(ChangeRecord(path=rec.path, action="modify", before=rec.after, after=content))
+                return {"ok": True, "path": rec.path, "action": "reapplied"}
+            return {"ok": False, "error": "Cannot redo this change"}
         except OSError as e:
             return {"ok": False, "error": str(e)}
 
@@ -158,6 +202,7 @@ class ChangeTracker:
 
     def clear(self) -> None:
         self.records.clear()
+        self._redo_stack.clear()
         self._originals.clear()
 
     def file_paths(self) -> list[str]:

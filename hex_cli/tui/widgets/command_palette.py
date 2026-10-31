@@ -32,6 +32,10 @@ PALETTE_ACTIONS: list[tuple[str, str, str]] = [
     ("clear", "Clear chat", "Clear current conversation view"),
     ("toggle_sidebar", "Toggle sidebar", "Show or hide the left sidebar"),
     ("help", "Help", "Keyboard shortcuts and commands"),
+    ("files", "File picker", "Fuzzy search and insert @path"),
+    ("editor", "External editor", "Compose prompt in $EDITOR"),
+    ("redo", "Redo change", "Re-apply last undone agent edit"),
+    ("themes", "Themes", "List available UI themes"),
     ("quit", "Quit", "Exit HEX"),
 ]
 

@@ -31,6 +31,14 @@ Inspired by tools such as OpenCode and OpenHands, HEX is an original implementat
   HEX CLI — AI Coding Agent
 ```
 
+## HEX CLI v0.7.0
+
+- Fuzzy **file picker** (`Ctrl+F` / `/files`) with preview and `@path` insert
+- **Themes**: `hex-dark`, `hex-light`, `high-contrast` (`/theme <id>`)
+- **External editor** compose (`Ctrl+E` / `/editor`, uses `HEX_EDITOR` / `EDITOR` / `VISUAL`)
+- Session-local **redo** after undo (`Ctrl+Y` / `/redo`) — not a git reset
+- Expanded help and command palette actions
+
 ## OpenCode parity notes (v0.6.2)
 
 Closer to OpenCode TUI workflows:

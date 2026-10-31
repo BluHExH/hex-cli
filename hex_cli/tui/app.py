@@ -30,6 +30,7 @@ from hex_cli.tui.widgets.dialogs import HelpDialog, PermissionDialog, SelectDial
 from hex_cli.tui.widgets.header import HeaderBar
 from hex_cli.tui.widgets.input_panel import InputPanel, PromptSubmitted
 from hex_cli.tui.widgets.command_palette import CommandPalette
+from hex_cli.tui.widgets.file_picker import FilePicker
 from hex_cli.tui.widgets.provider_dialogs import (
     ConnectProviderDialog,
     ModelBrowserDialog,
@@ -63,6 +64,9 @@ class HexApp(Stage2Mixin, App[None]):
         Binding("ctrl+n", "new_session", "New"),
         Binding("ctrl+p", "command_palette", "Palette"),
         Binding("ctrl+period", "stop_agent", "Stop", show=False),
+        Binding("ctrl+f", "file_picker", "Files", show=False),
+        Binding("ctrl+e", "external_editor", "Editor", show=False),
+        Binding("ctrl+y", "redo_change", "Redo", show=False),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar"),
         Binding("ctrl+h", "show_help", "Help"),
         Binding("ctrl+shift+a", "cycle_agent", "Agent", show=False),
@@ -592,6 +596,22 @@ class HexApp(Stage2Mixin, App[None]):
             self._post_system("LSP:\n" + "\n".join(lines))
             return
 
+        if lower.startswith("/theme"):
+            parts = text.split(maxsplit=1)
+            if len(parts) == 2:
+                self.action_set_theme(parts[1].strip())
+            else:
+                self._show_themes()
+            return
+        if lower in ("/redo",):
+            self.action_redo_change()
+            return
+        if lower in ("/files", "/file"):
+            self.action_file_picker()
+            return
+        if lower in ("/editor",):
+            self.action_external_editor()
+            return
         if lower in ("/export",):
             self._export_conversation()
             return
@@ -860,6 +880,81 @@ class HexApp(Stage2Mixin, App[None]):
             return text
         return text + "\n\n" + "\n\n".join(extras)
 
+
+
+    def action_file_picker(self) -> None:
+        def _done(path: str | None) -> None:
+            if not path:
+                return
+            try:
+                ta = self.query_one("#prompt-input")
+                cur = getattr(ta, "text", "") or ""
+                insert = f"@{path} "
+                if hasattr(ta, "insert"):
+                    ta.insert(insert)
+                elif hasattr(ta, "load_text"):
+                    ta.load_text((cur + " " + insert).strip() + " ")
+                self.query_one(InputPanel).focus_input()
+            except Exception as e:
+                self._post_error(f"Could not insert @{path}: {e}")
+        self.push_screen(FilePicker(self.project_root), _done)
+
+    def action_external_editor(self) -> None:
+        from hex_cli.editor_ext import compose_in_external_editor, resolve_editor
+        if not resolve_editor():
+            self._post_status("Set EDITOR, VISUAL, or HEX_EDITOR to use external compose.")
+            return
+        try:
+            ta = self.query_one("#prompt-input")
+            initial = getattr(ta, "text", "") or ""
+        except Exception:
+            initial = ""
+        # External editor blocks — run and reload
+        result = compose_in_external_editor(initial)
+        if result is None:
+            self._post_status("External editor cancelled or unavailable.")
+            return
+        try:
+            ta = self.query_one("#prompt-input")
+            if hasattr(ta, "load_text"):
+                ta.load_text(result)
+            elif hasattr(ta, "clear") and hasattr(ta, "insert"):
+                ta.clear()
+                ta.insert(result)
+            self.query_one(InputPanel).focus_input()
+            self._post_status("Loaded text from external editor.")
+        except Exception as e:
+            self._post_error(str(e))
+
+    def action_redo_change(self) -> None:
+        if not self._agent:
+            self._post_status("Agent not ready.")
+            return
+        result = self._agent.changes.redo_last()
+        if result.get("ok"):
+            self._post_system(f"Redo: {result.get('path')} ({result.get('action')})")
+        else:
+            self._post_error(result.get("error", "redo failed"))
+
+    def action_set_theme(self, theme_id: str = "hex-dark") -> None:
+        from hex_cli.tui.themes import get_theme
+        from hex_cli.tui.theme import HEX_CSS
+        theme = get_theme(theme_id)
+        css = HEX_CSS + ("\n" + theme.css if theme.css else "")
+        try:
+            self.stylesheet.add_source(css, path=f"hex-theme-{theme.id}")
+            self.refresh_css()
+            self._post_system(f"Theme: {theme.name}")
+        except Exception:
+            # fallback: store preference only
+            self.state.status_message = f"Theme preferred: {theme.name}"
+            self._post_system(f"Theme preference: {theme.name} (restart may be required)")
+
+
+    def _show_themes(self) -> None:
+        from hex_cli.tui.themes import list_themes
+        lines = [f"• {t.id} — {t.name}" for t in list_themes()]
+        self._post_system("Themes:\n" + "\n".join(lines) + "\n\nApply: /theme <id>")
 
     def action_command_palette(self) -> None:
         def _done(action_id: str | None) -> None:

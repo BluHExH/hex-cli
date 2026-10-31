@@ -1,3 +1,11 @@
+## HEX CLI v0.7.1 — stability
+
+- Fixed corrupted multiline prompt composer module (critical)
+- Structured tool execution lines with status / output preview
+- Live token streaming hooks from agent → conversation UI
+- Composer busy state + Ctrl+. stop awareness
+- Regression tests: 42 unit tests passing
+
 
 ## Stage 3 — Coding agent
 

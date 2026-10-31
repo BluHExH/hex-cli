@@ -97,6 +97,59 @@ class AgentLoop:
         self._init_system()
         self._ui("print_info", "Conversation context cleared.")
 
+
+    def _chat_with_optional_stream(self, tools: list) -> Any:
+        """Prefer streaming when provider supports it; fall back to chat()."""
+        self._streamed_this_step = False
+        stream_start = self._hooks.get("on_stream_start")
+        stream_token = self._hooks.get("on_stream_token")
+        stream_end = self._hooks.get("on_stream_end")
+        if hasattr(self.provider, "stream_chat") and stream_token:
+            try:
+                if stream_start:
+                    stream_start()
+                content_parts: list[str] = []
+                tool_calls = []
+                for event in self.provider.stream_chat(self.messages, tools=tools):
+                    if self._cancel.is_set():
+                        break
+                    kind = getattr(event, "kind", None)
+                    # StreamEvent or duck-typed
+                    name = getattr(kind, "name", str(kind) if kind is not None else "")
+                    if name in ("TOKEN", "token", "text") or getattr(event, "text", None):
+                        tok = getattr(event, "text", None) or getattr(event, "token", None) or ""
+                        if tok:
+                            content_parts.append(tok)
+                            stream_token(tok)
+                            self._streamed_this_step = True
+                    elif name in ("TOOL_CALL", "tool_call"):
+                        tool_calls.append(event)
+                    elif name in ("DONE", "done", "error"):
+                        break
+                if stream_end:
+                    stream_end()
+                from hex_cli.providers.base import ChatResponse, ToolCall
+                content = "".join(content_parts)
+                # If stream yielded nothing useful, fall back
+                if not content and not tool_calls:
+                    return self.provider.chat(self.messages, tools=tools)
+                # Rebuild tool calls if present on events
+                tcs = []
+                for ev in tool_calls:
+                    if hasattr(ev, "tool_call"):
+                        tcs.append(ev.tool_call)
+                return ChatResponse(content=content, tool_calls=tcs or None)
+            except Exception:
+                # Fall back to non-streaming
+                if stream_end:
+                    try:
+                        stream_end()
+                    except Exception:
+                        pass
+                return self.provider.chat(self.messages, tools=tools)
+        return self.provider.chat(self.messages, tools=tools)
+
+
     def run(self, user_task: str, *, plan_only: bool | None = None) -> str:
         """Process a single user task through the agent loop."""
         self.clear_cancel()
@@ -123,19 +176,16 @@ class AgentLoop:
             steps += 1
             spinner_ctx = self._ui("spinner", f"Thinking (step {steps}/{max_steps})…")
             try:
-                if spinner_ctx is not None:
-                    with spinner_ctx as progress:
-                        if hasattr(progress, "add_task"):
-                            progress.add_task("think")
-                        response = self.provider.chat(self.messages, tools=tools)
-                else:
-                    response = self.provider.chat(self.messages, tools=tools)
+                response = self._chat_with_optional_stream(tools)
             except ProviderError as e:
                 self._ui("print_error", str(e))
                 return str(e)
             except Exception as e:
                 self._ui("print_error", f"Unexpected error: {e}")
                 return str(e)
+            finally:
+                # spinner contexts from Rich are optional no-ops in TUI
+                pass
 
             assistant_msg = ChatMessage(role="assistant", content=response.content)
             if response.tool_calls:
@@ -152,9 +202,10 @@ class AgentLoop:
                 ]
             self.messages.append(assistant_msg)
 
-            if response.content:
+            # Avoid double-printing when tokens already streamed to UI
+            if response.content and not getattr(self, "_streamed_this_step", False):
                 self._ui("print_assistant", response.content)
-                final_text = response.content
+            final_text = response.content or final_text
 
             if not response.tool_calls:
                 break

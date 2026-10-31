@@ -97,6 +97,81 @@ class ChatLog(VerticalScroll):
         self.mount(widget)
         self.scroll_end(animate=False)
 
+
+    def append_tool_card(
+        self,
+        tool_name: str,
+        status: str,
+        detail: str = "",
+        output: str = "",
+        error: str = "",
+    ) -> str:
+        """Render a structured tool line; returns message widget id."""
+        from hex_cli.tui.state import ChatEntry
+        icon = {
+            "running": "⟳",
+            "ok": "✓",
+            "completed": "✓",
+            "error": "✗",
+            "failed": "✗",
+            "skipped": "⊘",
+            "denied": "⊘",
+            "cancelled": "–",
+        }.get(status, "•")
+        body = f"{icon}  [bold]{tool_name}[/] [{status}]"
+        if detail:
+            body += f"  {detail[:100]}"
+        if output and status in ("ok", "completed", "error", "failed"):
+            preview = output[:400].replace("[", "\\[")
+            body += f"\n[dim]{preview}[/]"
+        if error:
+            body += f"\n[red]{error[:300]}[/]"
+        entry = ChatEntry(kind="tool", text=body.replace("[bold]", "").replace("[/]", "").replace("[dim]", "").replace("[/dim]", "").replace("[red]", "").replace("[/red]", ""), meta={"status": status, "tool": tool_name})
+        # Use rich markup version
+        if self._has_welcome:
+            try:
+                self.query_one("#welcome-msg").remove()
+            except Exception:
+                pass
+            self._has_welcome = False
+        wid = _next_msg_id()
+        safe_body = body  # already escaped partially
+        widget = Static(safe_body, classes="message message-tool", id=wid, markup=True)
+        self.mount(widget)
+        self.scroll_end(animate=False)
+        return wid
+
+    def update_message(self, widget_id: str, text: str, kind: str = "assistant") -> None:
+        """Update an existing message widget (streaming)."""
+        try:
+            w = self.query_one(f"#{widget_id}", Static)
+            label = {"assistant": "HEX", "status": "…", "tool": "Tool"}.get(kind, kind)
+            color = {"assistant": "#a78bfa", "status": "#6e7681", "tool": "#d29922"}.get(kind, "#e6edf3")
+            safe = text.replace("[", "\\[")
+            w.update(f"[bold {color}]{label}[/]\n{safe}")
+            self.scroll_end(animate=False)
+        except Exception:
+            pass
+
+    def begin_assistant_stream(self) -> str:
+        """Mount an empty assistant bubble; return widget id for streaming updates."""
+        if self._has_welcome:
+            try:
+                self.query_one("#welcome-msg").remove()
+            except Exception:
+                pass
+            self._has_welcome = False
+        wid = _next_msg_id()
+        widget = Static(
+            "[bold #a78bfa]HEX[/]\n[dim]…[/]",
+            classes="message message-assistant",
+            id=wid,
+            markup=True,
+        )
+        self.mount(widget)
+        self.scroll_end(animate=False)
+        return wid
+
     def clear_messages(self, *, banner: str | None = None) -> None:
         try:
             self.remove_children()

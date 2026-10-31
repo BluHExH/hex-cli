@@ -209,7 +209,11 @@ class HexApp(Stage2Mixin, App[None]):
                 self._post_status, msg
             ),
             "print_info": lambda msg: self.call_from_thread(self._post_system, msg),
-            "spinner": None,  # TUI shows busy state instead
+            "spinner": None,
+            "on_stream_start": lambda: self.call_from_thread(self._stream_start),
+            "on_stream_token": lambda t: self.call_from_thread(self._stream_token, t),
+            "on_stream_end": lambda: self.call_from_thread(self._stream_end),
+            "on_busy": lambda b: self.call_from_thread(self._set_busy_ui, b),
         }
 
     # ------------------------------------------------------------------
@@ -244,6 +248,40 @@ class HexApp(Stage2Mixin, App[None]):
     # Message posting
     # ------------------------------------------------------------------
 
+
+    def _stream_start(self) -> None:
+        self._stream_id = None
+        self._stream_buf = ""
+        try:
+            self._stream_id = self.query_one(ChatLog).begin_assistant_stream()
+        except Exception:
+            self._stream_id = None
+
+    def _stream_token(self, token: str) -> None:
+        self._stream_buf = getattr(self, "_stream_buf", "") + token
+        wid = getattr(self, "_stream_id", None)
+        if wid:
+            try:
+                self.query_one(ChatLog).update_message(wid, self._stream_buf, kind="assistant")
+            except Exception:
+                pass
+
+    def _stream_end(self) -> None:
+        buf = getattr(self, "_stream_buf", "")
+        if buf:
+            self.state.add("assistant", buf)
+        self._stream_id = None
+        self._stream_buf = ""
+
+    def _set_busy_ui(self, busy: bool) -> None:
+        self.state.busy = busy
+        try:
+            self.query_one(InputPanel).set_busy(busy)
+        except Exception:
+            pass
+        self._refresh_chrome()
+
+
     def _post_user(self, text: str) -> None:
         e = self.state.add("user", text)
         self.query_one(ChatLog).append_entry(e)
@@ -254,10 +292,13 @@ class HexApp(Stage2Mixin, App[None]):
         e = self.state.add("assistant", text)
         self.query_one(ChatLog).append_entry(e)
 
-    def _post_tool(self, name: str, status: str, detail: str = "") -> None:
+    def _post_tool(self, name: str, status: str, detail: str = "", output: str = "", error: str = "") -> None:
         line = name if not detail else f"{name}  {detail}"
         e = self.state.add("tool", line, status=status)
-        self.query_one(ChatLog).append_entry(e)
+        try:
+            self.query_one(ChatLog).append_tool_card(name, status, detail, output=output, error=error)
+        except Exception:
+            self.query_one(ChatLog).append_entry(e)
 
     def _post_error(self, text: str) -> None:
         e = self.state.add("error", text)
@@ -706,7 +747,7 @@ class HexApp(Stage2Mixin, App[None]):
     def run_agent_task(self, text: str, plan_only: bool = False) -> None:
         self.state.busy = True
         self.state.status_message = "Thinking…"
-        self.call_from_thread(self._refresh_chrome)
+        self.call_from_thread(self._set_busy_ui, True)
         try:
             if self._agent is None:
                 self.call_from_thread(self._post_error, "Agent not ready. Check provider config.")
@@ -718,7 +759,7 @@ class HexApp(Stage2Mixin, App[None]):
             self.state.status_message = "Error"
         finally:
             self.state.busy = False
-            self.call_from_thread(self._refresh_chrome)
+            self.call_from_thread(self._set_busy_ui, False)
             self.call_from_thread(lambda: self.query_one(InputPanel).focus_input())
 
     # ------------------------------------------------------------------

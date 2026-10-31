@@ -1,4 +1,4 @@
-"""Main conversation panel with unique message widget IDs."""
+"""Main conversation panel — OpenCode-style message layout with unique IDs."""
 
 from __future__ import annotations
 
@@ -12,12 +12,10 @@ from textual.widgets import Static
 
 from hex_cli.tui.state import ChatEntry
 
-# Process-wide monotonic counter — never resets across clear/new-session.
 _MSG_SEQ = itertools.count(1)
 
 
 def _next_msg_id() -> str:
-    """Return a globally unique widget id for a chat message."""
     return f"msg-{next(_MSG_SEQ)}-{uuid.uuid4().hex[:8]}"
 
 
@@ -40,13 +38,14 @@ class ChatLog(VerticalScroll):
     @staticmethod
     def _welcome_markup() -> str:
         return (
-            "[bold #c084fc]Welcome to HEX[/]\n"
-            "[dim]Describe a coding task, or type [bold]/[/] for commands.\n"
-            "Ctrl+H help · Ctrl+P models · Ctrl+N new session[/]"
+            "[bold #a78bfa]HEX[/]  ·  AI coding agent\n\n"
+            "[dim]Describe a coding task below, or type [bold]/[/] for commands.\n\n"
+            "  [bold]Ctrl+N[/]  new session     [bold]Ctrl+B[/]  sidebar\n"
+            "  [bold]Ctrl+P[/]  models          [bold]Ctrl+H[/]  help\n"
+            "  [bold]Enter[/]   send            [bold]Shift+Enter[/]  newline[/]"
         )
 
     def append_entry(self, entry: ChatEntry) -> None:
-        # Remove welcome banner on first real message
         if self._has_welcome:
             try:
                 w = self.query_one("#welcome-msg", Static)
@@ -69,20 +68,24 @@ class ChatLog(VerticalScroll):
         body = entry.text
         if entry.kind == "tool":
             status = entry.meta.get("status", "")
-            icon = {"running": "⟳", "ok": "✓", "error": "✗", "skipped": "⊘"}.get(
-                status, "•"
-            )
-            body = f"{icon} {entry.text}"
+            icon = {
+                "running": "⟳",
+                "ok": "✓",
+                "error": "✗",
+                "skipped": "⊘",
+                "denied": "⊘",
+                "cancelled": "–",
+            }.get(status, "•")
+            body = f"{icon}  {entry.text}"
 
-        # Escape markup brackets so user content cannot break Rich markup
         safe = body.replace("[", "\\[")
         header_color = {
             "user": "#58a6ff",
-            "assistant": "#c084fc",
+            "assistant": "#a78bfa",
             "tool": "#d29922",
             "error": "#f85149",
-            "system": "#8b949e",
-            "status": "#8b949e",
+            "system": "#7d8590",
+            "status": "#6e7681",
         }.get(entry.kind, "#e6edf3")
 
         widget = Static(
@@ -95,12 +98,6 @@ class ChatLog(VerticalScroll):
         self.scroll_end(animate=False)
 
     def clear_messages(self, *, banner: str | None = None) -> None:
-        """Remove all message widgets and show a welcome/cleared banner.
-
-        Uses remove_children() so Textual releases IDs before new widgets mount.
-        Message IDs are never reused (global monotonic + uuid).
-        """
-        # Synchronous bulk removal — avoids ID collisions with deferred remove()
         try:
             self.remove_children()
         except Exception:
@@ -111,7 +108,6 @@ class ChatLog(VerticalScroll):
                     pass
 
         text = banner if banner is not None else self._welcome_markup()
-        # Banner gets a unique id each time as well
         banner_id = f"welcome-{uuid.uuid4().hex[:8]}"
         self.mount(
             Static(

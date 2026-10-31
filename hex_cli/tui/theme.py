@@ -1,32 +1,33 @@
-"""HEX TUI colour theme and CSS — professional dark terminal aesthetic."""
+"""HEX TUI theme — professional dark coding-agent aesthetic (OpenCode-inspired layout)."""
 
 from __future__ import annotations
 
 HEX_CSS = """
 Screen {
-    background: #0a0e14;
+    background: #0b0f14;
     color: #e6edf3;
 }
 
+/* ── Top chrome ─────────────────────────────────────────── */
 #header {
     dock: top;
-    height: 3;
-    background: #0d1117;
-    border-bottom: tall #21262d;
+    height: 1;
+    background: #0b0f14;
+    border-bottom: solid #1c2333;
     padding: 0 1;
     layout: horizontal;
 }
 
 #header-brand {
-    width: 16;
-    color: #c084fc;
+    width: 10;
+    color: #a78bfa;
     text-style: bold;
     content-align: left middle;
 }
 
 #header-project {
     width: 1fr;
-    color: #8b949e;
+    color: #7d8590;
     content-align: left middle;
 }
 
@@ -38,7 +39,7 @@ Screen {
 }
 
 #header-status {
-    width: 12;
+    width: 14;
     content-align: right middle;
 }
 
@@ -46,11 +47,13 @@ Screen {
 .status-busy { color: #d29922; }
 .status-err { color: #f85149; }
 
+/* ── Left sidebar ───────────────────────────────────────── */
 #sidebar {
     dock: left;
-    width: 26;
+    width: 28;
     background: #0d1117;
-    border-right: tall #21262d;
+    border-right: solid #1c2333;
+    height: 1fr;
 }
 
 #sidebar.collapsed {
@@ -59,10 +62,19 @@ Screen {
     display: none;
 }
 
+#sidebar-brand {
+    height: 3;
+    padding: 1 1 0 1;
+    color: #a78bfa;
+    text-style: bold;
+    border-bottom: solid #1c2333;
+}
+
 .sidebar-section {
     color: #6e7681;
     text-style: bold;
     padding: 1 1 0 1;
+    height: 2;
 }
 
 .sidebar-item {
@@ -77,28 +89,69 @@ Screen {
 }
 
 .sidebar-item.-active {
-    background: #21262d;
-    color: #c084fc;
+    background: #1f1635;
+    color: #c4b5fd;
     text-style: bold;
+    border-left: thick #a78bfa;
 }
 
 .sidebar-meta {
     padding: 0 1;
-    color: #8b949e;
+    color: #7d8590;
     height: 1;
+}
+
+.sidebar-path {
+    padding: 0 1;
+    color: #484f58;
+    height: 1;
+}
+
+#session-list {
+    height: 1fr;
+    max-height: 14;
+    padding-bottom: 0;
+}
+
+#btn-new-session {
+    margin: 0 1 1 1;
+    background: #161b22;
+    color: #a78bfa;
+    border: tall #30363d;
+    text-align: center;
+}
+
+#btn-new-session:hover {
+    background: #1f1635;
+    border: tall #a78bfa;
+}
+
+#sidebar-footer {
+    height: auto;
+    border-top: solid #1c2333;
+    padding: 1 0;
+}
+
+/* ── Main workspace ─────────────────────────────────────── */
+#main-workspace {
+    width: 1fr;
+    height: 1fr;
+    background: #0b0f14;
+    layout: vertical;
 }
 
 #chat-container {
     width: 1fr;
     height: 1fr;
-    background: #0a0e14;
+    background: #0b0f14;
 }
 
 #chat-log {
     height: 1fr;
     padding: 1 2;
-    scrollbar-background: #0a0e14;
+    scrollbar-background: #0b0f14;
     scrollbar-color: #30363d;
+    scrollbar-size: 1 1;
 }
 
 .message {
@@ -110,17 +163,22 @@ Screen {
     border-left: thick #58a6ff;
     background: #0d1117;
     padding: 1 1;
+    margin-bottom: 1;
 }
 
 .message-assistant {
-    border-left: thick #c084fc;
+    border-left: thick #a78bfa;
+    background: #0d1117;
     padding: 1 1;
+    margin-bottom: 1;
 }
 
 .message-tool {
     border-left: thick #d29922;
     color: #e3b341;
+    background: #12100a;
     padding: 0 1;
+    margin-bottom: 1;
 }
 
 .message-error {
@@ -131,7 +189,7 @@ Screen {
 }
 
 .message-system {
-    color: #8b949e;
+    color: #7d8590;
     padding: 0 1;
 }
 
@@ -141,66 +199,97 @@ Screen {
 }
 
 .message-welcome {
-    color: #8b949e;
-    padding: 2 2;
+    color: #7d8590;
+    padding: 2 3;
     text-align: center;
+    height: auto;
 }
 
-#input-wrap {
+/* ── Prompt composer (OpenCode-style) ───────────────────── */
+#composer {
     dock: bottom;
     height: auto;
-    max-height: 14;
+    min-height: 7;
+    max-height: 16;
     background: #0d1117;
-    border-top: tall #21262d;
-    padding: 0 1;
+    border-top: solid #1c2333;
+    padding: 0 1 0 1;
 }
 
-#input-bar {
+#composer-meta {
     height: 1;
+    layout: horizontal;
     color: #6e7681;
     padding: 0 1;
 }
 
+#composer-agent {
+    width: auto;
+    color: #a78bfa;
+    padding-right: 2;
+}
+
+#composer-model {
+    width: 1fr;
+    color: #58a6ff;
+}
+
+#composer-hint {
+    width: auto;
+    color: #484f58;
+    content-align: right middle;
+}
+
 #prompt-input {
-    height: 4;
-    min-height: 3;
-    max-height: 8;
+    height: 5;
+    min-height: 4;
+    max-height: 12;
     background: #161b22;
     border: tall #30363d;
     padding: 0 1;
+    margin: 0 0 0 0;
 }
 
 #prompt-input:focus {
-    border: tall #c084fc;
+    border: tall #a78bfa;
 }
 
 #cmd-suggest {
     height: auto;
-    max-height: 8;
+    max-height: 7;
     background: #161b22;
     border: tall #30363d;
     padding: 0 1;
     display: none;
+    margin-bottom: 0;
 }
 
 #cmd-suggest.visible {
     display: block;
 }
 
+#composer-footer {
+    height: 1;
+    color: #484f58;
+    padding: 0 1;
+}
+
+/* ── Status footer ──────────────────────────────────────── */
 #footer-bar {
     dock: bottom;
     height: 1;
     background: #010409;
     color: #6e7681;
     padding: 0 1;
-    border-top: solid #21262d;
+    border-top: solid #1c2333;
 }
 
+/* ── Dialogs ────────────────────────────────────────────── */
 .dialog {
     width: 72;
-    max-width: 90%;
+    max-width: 92%;
     height: auto;
-    max-height: 80%;
+    max-height: 85%;
     background: #161b22;
     border: tall #30363d;
     padding: 1 2;
@@ -208,7 +297,7 @@ Screen {
 
 .dialog-title {
     text-style: bold;
-    color: #c084fc;
+    color: #a78bfa;
     margin-bottom: 1;
 }
 
@@ -231,6 +320,22 @@ Screen {
     height: 3;
     align: right middle;
 }
+
+Button {
+    background: #21262d;
+    color: #e6edf3;
+    border: tall #30363d;
+}
+
+Button:hover {
+    background: #30363d;
+}
+
+Button.-primary {
+    background: #1f1635;
+    color: #c4b5fd;
+    border: tall #a78bfa;
+}
 """
 
 HEX_LOGO = """
@@ -241,3 +346,5 @@ HEX_LOGO = """
 ██║  ██║███████╗██╔╝ ██╗
 ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 """
+
+HEX_BRAND_LINE = "HEX"

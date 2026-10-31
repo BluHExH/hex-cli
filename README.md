@@ -31,6 +31,15 @@ Inspired by tools such as OpenCode and OpenHands, HEX is an original implementat
   HEX CLI — AI Coding Agent
 ```
 
+## UI reconstruction (v0.6.1)
+
+OpenCode-inspired full-screen layout:
+
+- **Left sidebar** — HEX brand, sessions, new session, project path, agent, model, provider, git branch, online status
+- **Main workspace** — conversation with distinct user / assistant / tool / system styles and welcome screen
+- **Prompt composer** — large multiline input (Enter send, Shift+Enter newline, `/` slash suggestions, agent + model meta)
+- **Keyboard** — Ctrl+N new session, Ctrl+B sidebar, Ctrl+P models, Ctrl+H help, Ctrl+Shift+A cycle agent
+
 ## Stage 5 — Multi-agent, MCP, Skills & Developer Ecosystem (v0.6.0)
 
 - **Parallel subagents** — isolated contexts, concurrency limits, structured merge, cancellation

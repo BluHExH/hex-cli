@@ -19,7 +19,7 @@ class HeaderBar(Static):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="header"):
-            yield Static(" ◆ HEX ", id="header-brand")
+            yield Static(" ⬡ HEX ", id="header-brand")
             yield Static("", id="header-project")
             yield Static("", id="header-provider")
             yield Static("○ offline", id="header-status", classes="status-err")

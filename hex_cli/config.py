@@ -88,7 +88,7 @@ class ProjectConfig(BaseModel):
 class AppConfig(BaseModel):
     """Top-level HEX CLI configuration."""
 
-    version: str = "0.6.0"
+    version: str = "0.6.1"
     active_provider: str = "openrouter"
     providers: dict[str, ProviderConfig] = Field(default_factory=dict)
     permissions: PermissionConfig = Field(default_factory=PermissionConfig)

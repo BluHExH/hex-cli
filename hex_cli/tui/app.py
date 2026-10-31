@@ -60,9 +60,10 @@ class HexApp(Stage2Mixin, App[None]):
         Binding("ctrl+q", "quit_app", "Quit"),
         Binding("ctrl+l", "clear_chat", "Clear"),
         Binding("ctrl+n", "new_session", "New"),
-        Binding("ctrl+p", "pick_model", "Model"),
+        Binding("ctrl+p", "pick_model", "Models"),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar"),
         Binding("ctrl+h", "show_help", "Help"),
+        Binding("ctrl+shift+a", "cycle_agent", "Agent", show=False),
         Binding("escape", "focus_input", "Focus", show=False),
     ]
 
@@ -285,6 +286,28 @@ class HexApp(Stage2Mixin, App[None]):
         except Exception:
             pass
         self._tick_footer()
+        try:
+            sidebar = self.query_one(Sidebar)
+            sidebar.agent = getattr(self.state, "agent", "general")
+        except Exception:
+            pass
+        try:
+            panel = self.query_one(InputPanel)
+            panel.set_meta(
+                agent=getattr(self.state, "agent", "general"),
+                model=self.state.model,
+            )
+        except Exception:
+            pass
+        try:
+            from hex_cli.tools.git_tools import GitTools
+            from hex_cli.permissions import PermissionManager
+            gt = GitTools(self.project_root, PermissionManager(self.config, self.project_root), self.config)
+            st = gt.git_status()
+            if st.get("ok"):
+                self.query_one(Sidebar).git_branch = st.get("branch", "")
+        except Exception:
+            pass
 
     def _tick_footer(self) -> None:
         try:
@@ -741,9 +764,27 @@ class HexApp(Stage2Mixin, App[None]):
     def action_show_help(self) -> None:
         self.push_screen(HelpDialog())
 
+    
+    def action_cycle_agent(self) -> None:
+        order = ["general", "build", "plan", "explore"]
+        cur = getattr(self.state, "agent", "general")
+        try:
+            idx = order.index(cur)
+        except ValueError:
+            idx = 0
+        nxt = order[(idx + 1) % len(order)]
+        self.state.agent = nxt
+        self.state.active_session.agent = nxt
+        if self._agent:
+            try:
+                self._agent.set_agent(nxt)
+            except Exception:
+                pass
+        self._post_system(f"Agent: {nxt}")
+        self._refresh_chrome()
+
     def action_focus_input(self) -> None:
         self.query_one(InputPanel).focus_input()
-
 
     def action_pick_provider(self) -> None:
         options = list(self.config.providers.keys())

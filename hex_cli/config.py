@@ -1,7 +1,7 @@
 """Configuration management for HEX CLI.
 
-User-level config lives in ~/.hex/ (or %USERPROFILE%\\.hex on Windows).
-API keys are read from environment variables or a local .env file —
+User-level config lives in ~/.hex/ (or %USERPROFILE%\.hex on Windows).
+API keys are read from environment variables, stored credentials, or .env —
 never stored in tracked project files.
 """
 
@@ -60,8 +60,8 @@ class ProviderConfig(BaseModel):
 class AppConfig(BaseModel):
     """Top-level HEX CLI configuration."""
 
-    version: str = "0.1.0"
-    active_provider: str = "openai"
+    version: str = "0.3.0"
+    active_provider: str = "openrouter"
     providers: dict[str, ProviderConfig] = Field(default_factory=dict)
     permissions: PermissionConfig = Field(default_factory=PermissionConfig)
     max_agent_steps: int = 25
@@ -71,35 +71,15 @@ class AppConfig(BaseModel):
     context_max_files: int = 40
     context_max_chars: int = 80_000
     session_history: bool = True
+    selected_model: str | None = None
 
     def model_post_init(self, __context: Any) -> None:
+        from hex_cli.providers.registry import ensure_default_providers
+
         if not self.providers:
-            self.providers = {
-                "openai": ProviderConfig(
-                    name="openai",
-                    base_url="https://api.openai.com/v1",
-                    api_key_env="OPENAI_API_KEY",
-                    default_model="gpt-4o-mini",
-                ),
-                "ollama": ProviderConfig(
-                    name="ollama",
-                    base_url="http://localhost:11434/v1",
-                    api_key_env="OLLAMA_API_KEY",
-                    default_model="llama3.2",
-                ),
-                "openrouter": ProviderConfig(
-                    name="openrouter",
-                    base_url="https://openrouter.ai/api/v1",
-                    api_key_env="OPENROUTER_API_KEY",
-                    default_model="openai/gpt-4o-mini",
-                ),
-                "groq": ProviderConfig(
-                    name="groq",
-                    base_url="https://api.groq.com/openai/v1",
-                    api_key_env="GROQ_API_KEY",
-                    default_model="llama-3.3-70b-versatile",
-                ),
-            }
+            self.providers = ensure_default_providers({})
+        else:
+            self.providers = ensure_default_providers(self.providers)
 
     def get_active_provider(self) -> ProviderConfig:
         if self.active_provider not in self.providers:
@@ -154,13 +134,13 @@ def load_dotenv_if_present(project_root: Path | None = None) -> None:
 
 
 def get_api_key(provider: ProviderConfig) -> str | None:
-    """Return the API key for a provider from the environment. Never log it."""
-    key = os.environ.get(provider.api_key_env)
-    if key:
-        return key.strip()
-    if provider.name == "ollama":
-        return os.environ.get("OLLAMA_API_KEY", "ollama")
-    return None
+    """Return the API key for a provider. Never log it.
+
+    Resolution order: environment variable → stored credential → ollama default.
+    """
+    from hex_cli.providers.credentials import resolve_api_key
+
+    return resolve_api_key(provider)
 
 
 class EnvInfo(BaseModel):

@@ -121,7 +121,7 @@ class AgentLoop:
                 if len(result_str) > 20_000:
                     result_str = result_str[:20_000] + "…(truncated)"
 
-                self.messages conv.append(
+                self.messages.append(
                     ChatMessage(
                         role="tool",
                         tool_call_id=tc.id,

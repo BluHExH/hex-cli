@@ -131,17 +131,59 @@ class Stage2Mixin:
         self.push_screen(ConnectProviderDialog(specs, connected), _done)
 
     def action_show_providers(self) -> None:
-        lines = []
-        for pid, pcfg in self.config.providers.items():
-            key = get_api_key(pcfg)
-            status = "connected" if key or pid in ("ollama", "custom") else "no key"
-            active = " (active)" if pid == self.config.active_provider else ""
-            lines.append(f"• {pid}{active} — {status} — key {mask_key(key)}")
-        stored = list_connected_provider_ids()
-        if stored:
-            lines.append("")
-            lines.append("Stored credentials: " + ", ".join(stored))
-        self.push_screen(ProvidersStatusDialog(lines))
+        """Open a selectable provider picker (keyboard + mouse)."""
+        from hex_cli.tui.widgets.dialogs import SelectDialog
+        from hex_cli.providers.registry import list_provider_specs, get_provider_spec, spec_to_config
+
+        specs = list_provider_specs()
+        options: list[str] = []
+        id_by_label: dict[str, str] = {}
+        for s in specs:
+            key_ok = False
+            try:
+                pcfg = self.config.providers.get(s.id)
+                if pcfg:
+                    key_ok = bool(get_api_key(pcfg)) or not s.requires_key
+                else:
+                    key_ok = not s.requires_key
+            except Exception:
+                key_ok = not s.requires_key
+            mark = "✓" if key_ok else "○"
+            active = " ★" if s.id == self.config.active_provider else ""
+            label = f"{mark} {s.display_name} ({s.id}){active}"
+            options.append(label)
+            id_by_label[label] = s.id
+
+        def _done(choice: str | None) -> None:
+            if not choice:
+                return
+            pid = id_by_label.get(choice) or choice
+            # Allow raw id if matched
+            for lab, i in id_by_label.items():
+                if choice == lab or choice.endswith(f"({i})") or choice == i:
+                    pid = i
+                    break
+            self._set_provider(pid)
+            # Offer connect if needs key
+            spec = get_provider_spec(pid)
+            if spec and spec.requires_key:
+                pcfg = self.config.providers.get(pid)
+                if not pcfg or not get_api_key(pcfg):
+                    self._post_status(
+                        f"Provider {pid} selected. No API key yet — run /connect to add one."
+                    )
+
+        self.push_screen(
+            SelectDialog(
+                "Select provider",
+                options,
+                current=next(
+                    (lab for lab, i in id_by_label.items() if i == self.config.active_provider),
+                    "",
+                ),
+            ),
+            _done,
+        )
 
     def action_disconnect_provider(self) -> None:
         self._disconnect_named(self.state.provider_name)

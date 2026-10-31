@@ -53,6 +53,7 @@ from hex_cli.providers.credentials import (
     set_credential,
 )
 from hex_cli.providers.registry import list_provider_specs
+from hex_cli.knowledge.identity import try_offline_identity
 
 # Fallback free presets (OpenRouter :free convention only — never invent paid-as-free)
 FREE_MODEL_PRESETS = list(OPENROUTER_FREE_FALLBACK)
@@ -372,6 +373,14 @@ class HexApp(Stage2Mixin, App[None]):
             self._post_user(text)
             self._run_bang_command(cmd)
             return
+
+        # Offline identity (no network) — only for natural language questions
+        if not text.startswith("/"):
+            offline = try_offline_identity(text)
+            if offline:
+                self._post_user(text)
+                self._post_assistant(offline)
+                return
 
         lower = text.lower().strip()
         if lower in ("/exit", "/quit", "exit", "quit"):

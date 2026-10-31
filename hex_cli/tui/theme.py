@@ -199,10 +199,11 @@ Screen {
 }
 
 .message-welcome {
-    color: #7d8590;
-    padding: 2 3;
+    color: #c9d1d9;
+    padding: 6 4 4 4;
     text-align: center;
     height: auto;
+    width: 100%;
 }
 
 /* ── Prompt composer (OpenCode-style) ───────────────────── */

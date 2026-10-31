@@ -1,3 +1,13 @@
+## HEX CLI v0.9.0
+
+- **Full-size welcome** with centered HEX branding (Powered by HEX · NeonBuild)
+- **Offline identity** answers product questions without an API key
+- **/provider** opens a selectable provider picker (keyboard + mouse)
+- **/model** model browser remains fully functional
+- Explore the full UI without configuring a provider
+
+Offline examples: "Who are you?", "Who built you?", "What powers you?", "Can you work offline?"
+
 ## HEX CLI v0.8.0
 
 - **Minimal startup** — no banner/debug spam in the conversation pane

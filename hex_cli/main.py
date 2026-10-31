@@ -50,6 +50,11 @@ def _setup_permissions(config: AppConfig, root: Path) -> PermissionManager:
 def main(
     ctx: typer.Context,
     version: bool = typer.Option(False, "--version", "-V", help="Show version and exit"),
+    classic: bool = typer.Option(
+        False,
+        "--classic",
+        help="Use the classic line-oriented prompt instead of the full-screen TUI",
+    ),
 ) -> None:
     if version:
         ui.print_version()
@@ -58,10 +63,35 @@ def main(
     if ctx.invoked_subcommand is not None:
         return
 
-    _start_chat()
+    if classic:
+        _start_chat_classic()
+    else:
+        _start_tui()
 
 
-def _start_chat(model_override: str | None = None) -> None:
+def _start_tui(model_override: str | None = None) -> None:
+    """Launch the Textual full-screen interface."""
+    try:
+        from hex_cli.tui import run_tui
+    except ImportError as e:
+        ui.print_error(f"TUI dependencies missing: {e}")
+        ui.print_info("Install with: pip install textual")
+        ui.print_info("Falling back to classic mode\u2026")
+        _start_chat_classic(model_override=model_override)
+        return
+
+    root = _project_root()
+    load_dotenv_if_present(root)
+    try:
+        run_tui(project_root=root, model=model_override)
+    except Exception as e:
+        ui.print_error(f"TUI failed to start: {e}")
+        ui.print_info("Try classic mode: hex --classic")
+        raise typer.Exit(1)
+
+
+def _start_chat_classic(model_override: str | None = None) -> None:
+    """Classic Rich line-prompt session (pre-TUI)."""
     root = _project_root()
     load_dotenv_if_present(root)
     config = load_config()
@@ -185,9 +215,17 @@ def _show_status(config: AppConfig, root: Path, model: str) -> None:
 @app.command()
 def chat(
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Model override"),
+    classic: bool = typer.Option(
+        False,
+        "--classic",
+        help="Use the classic line-oriented prompt instead of the full-screen TUI",
+    ),
 ) -> None:
-    """Start an interactive coding session (default)."""
-    _start_chat(model_override=model)
+    """Start an interactive coding session (default: full-screen TUI)."""
+    if classic:
+        _start_chat_classic(model_override=model)
+    else:
+        _start_tui(model_override=model)
 
 
 @app.command()
@@ -225,12 +263,12 @@ def doctor() -> None:
             f"No API key found for {p.name}. Set {p.api_key_env} or add it to .env"
         )
         ui.print_info("Free / local options:")
-        ui.print_info("  • Ollama (local): install from https://ollama.com then `ollama serve`")
-        ui.print_info("  • Groq free tier: https://console.groq.com")
-        ui.print_info("  • OpenRouter: https://openrouter.ai")
+        ui.print_info("  \u2022 Ollama (local): install from https://ollama.com then `ollama serve`")
+        ui.print_info("  \u2022 Groq free tier: https://console.groq.com")
+        ui.print_info("  \u2022 OpenRouter: https://openrouter.ai")
         return
 
-    ui.print_info(f"Probing {p.name} …")
+    ui.print_info(f"Probing {p.name} \u2026")
     try:
         provider = create_provider(p)
         from hex_cli.providers.base import ChatMessage
@@ -323,8 +361,8 @@ def init() -> None:
     save_config(cfg)
     ui.print_success(f"Created {path}")
     ui.print_info("Set an API key, e.g.:")
-    ui.print_info("  $env:OPENAI_API_KEY = 'sk-…'     # PowerShell")
-    ui.print_info("  export OPENAI_API_KEY=sk-…       # bash")
+    ui.print_info("  $env:OPENAI_API_KEY = 'sk-\u2026'     # PowerShell")
+    ui.print_info("  export OPENAI_API_KEY=sk-\u2026       # bash")
     ui.print_info("Or create ~/.hex/.env with KEY=value lines.")
     ui.print_info("For local models: install Ollama, then `hex config` and select ollama.")
 

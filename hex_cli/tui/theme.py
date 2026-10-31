@@ -200,14 +200,21 @@ Screen {
 
 .message-welcome {
     color: #c9d1d9;
-    padding: 6 4 4 4;
+    padding: 3 2 2 2;
     text-align: center;
     height: auto;
     width: 100%;
 }
 
 /* ── Prompt composer (OpenCode-style) ───────────────────── */
+#activity-bar {
+    height: 1;
+    padding: 0 2;
+    background: #0d1117;
+    color: #d29922;
+}
 #composer {
+
     dock: bottom;
     height: auto;
     min-height: 7;
@@ -257,7 +264,20 @@ Screen {
 #btn-send:hover {
     background: #2d1f4e;
 }
+#btn-stop {
+    width: 10;
+    min-width: 8;
+    height: 5;
+    margin-left: 1;
+    background: #3d1214;
+    color: #ffa198;
+    border: tall #f85149;
+}
+#btn-stop:hover {
+    background: #5a1d20;
+}
 #btn-send:disabled {
+
     opacity: 0.5;
 }
 #prompt-input {

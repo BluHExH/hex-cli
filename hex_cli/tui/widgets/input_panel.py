@@ -95,6 +95,7 @@ class InputPanel(Static):
             with Horizontal(id="composer-row"):
                 yield PromptTextArea(id="prompt-input")
                 yield Button("Send", id="btn-send", classes="-primary")
+                yield Button("Stop", id="btn-stop")
             yield Static(
                 "  Ctrl+P palette · Ctrl+F files · Ctrl+N new · Ctrl+B sidebar",
                 id="composer-footer",
@@ -104,6 +105,10 @@ class InputPanel(Static):
         try:
             ta = self.query_one("#prompt-input", PromptTextArea)
             ta.show_line_numbers = False
+        except Exception:
+            pass
+        try:
+            self.query_one("#btn-stop", Button).display = False
         except Exception:
             pass
 
@@ -128,14 +133,17 @@ class InputPanel(Static):
         try:
             hint = self.query_one("#composer-hint", Static)
             btn = self.query_one("#btn-send", Button)
+            stop = self.query_one("#btn-stop", Button)
             if busy:
-                hint.update("Working…  Ctrl+. stop")
+                hint.update("Working…  Ctrl+. or Stop")
                 btn.label = "…"
                 btn.disabled = True
+                stop.display = True
             else:
                 hint.update("Enter send · Shift+Enter newline")
                 btn.label = "Send"
                 btn.disabled = False
+                stop.display = False
         except Exception:
             pass
 
@@ -164,6 +172,12 @@ class InputPanel(Static):
         if event.button.id == "btn-send":
             event.stop()
             self._submit_current()
+        elif event.button.id == "btn-stop":
+            event.stop()
+            try:
+                self.app.action_stop_agent()
+            except Exception:
+                pass
 
     def _show_suggestions(self, prefix: str) -> None:
         box = self.query_one("#cmd-suggest", Static)

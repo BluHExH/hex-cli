@@ -1,3 +1,23 @@
+## HEX CLI v1.0.0
+
+Professional terminal AI coding agent by **NeonBuild** (*Powered by HEX*).
+
+### Highlights
+- Full-size HEX welcome workspace
+- Live **activity indicator** tied to agent/tool state
+- Streaming responses when the provider supports it
+- Tool execution status in the conversation
+- **Stop** control during generation
+- Offline product identity without an API key
+- Provider/model pickers, sessions, permissions, undo/redo
+
+### Quick start
+```bash
+pip install -e .
+hex
+```
+Configure a provider with `/provider` or `/connect`.
+
 ## HEX CLI v0.9.0
 
 - **Full-size welcome** with centered HEX branding (Powered by HEX · NeonBuild)

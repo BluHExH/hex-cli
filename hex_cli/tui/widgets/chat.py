@@ -37,14 +37,23 @@ class ChatLog(VerticalScroll):
 
     @staticmethod
     def _welcome_markup() -> str:
-        return (
-            "\n\n"
-            "[bold #a78bfa]████  HEX  ████[/]\n\n"
-            "[bold]Your AI coding workspace.[/]\n"
-            "[dim]Build. Create. Explore.[/]\n\n"
-            "[dim]Powered by HEX  ·  By NeonBuild[/]\n\n"
-            "[dim]Type a message below  ·  /provider  ·  /models  ·  /help[/]"
-        )
+        lines = [
+            "",
+            "[bold #a78bfa]██╗  ██╗███████╗██╗  ██╗[/]",
+            "[bold #a78bfa]██║  ██║██╔════╝╚██╗██╔╝[/]",
+            "[bold #a78bfa]███████║█████╗   ╚███╔╝[/]",
+            "[bold #a78bfa]██╔══██║██╔══╝   ██╔██╗[/]",
+            "[bold #a78bfa]██║  ██║███████╗██╔╝ ██╗[/]",
+            "[bold #a78bfa]╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝[/]",
+            "",
+            "[bold]Your AI Coding Workspace[/]",
+            "[dim]Build. Create. Explore.[/]",
+            "",
+            "[dim]Powered by HEX  ·  By NeonBuild[/]",
+            "",
+            "[dim]Enter a task below  ·  /provider  ·  /models  ·  /help[/]",
+        ]
+        return "\n".join(lines)
 
     def append_entry(self, entry: ChatEntry) -> None:
         if self._has_welcome:

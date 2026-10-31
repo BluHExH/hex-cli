@@ -29,6 +29,7 @@ from hex_cli.tui.widgets.chat import ChatLog
 from hex_cli.tui.widgets.dialogs import HelpDialog, PermissionDialog, SelectDialog
 from hex_cli.tui.widgets.header import HeaderBar
 from hex_cli.tui.widgets.input_panel import InputPanel, PromptSubmitted
+from hex_cli.tui.widgets.activity_bar import ActivityBar
 from hex_cli.tui.widgets.command_palette import CommandPalette
 from hex_cli.tui.widgets.file_picker import FilePicker
 from hex_cli.tui.widgets.provider_dialogs import (
@@ -112,6 +113,7 @@ class HexApp(Stage2Mixin, App[None]):
             yield Sidebar(self.project_root)
             with Vertical(id="chat-container"):
                 yield ChatLog()
+                yield ActivityBar()
                 yield InputPanel()
         yield Static("", id="footer-bar")
 
@@ -238,6 +240,10 @@ class HexApp(Stage2Mixin, App[None]):
             self._stream_id = self.query_one(ChatLog).begin_assistant_stream()
         except Exception:
             self._stream_id = None
+        try:
+            self.query_one(ActivityBar).set_activity("thinking", busy=True)
+        except Exception:
+            pass
 
     def _stream_token(self, token: str) -> None:
         self._stream_buf = getattr(self, "_stream_buf", "") + token
@@ -261,6 +267,16 @@ class HexApp(Stage2Mixin, App[None]):
             self.query_one(InputPanel).set_busy(busy)
         except Exception:
             pass
+        try:
+            bar = self.query_one(ActivityBar)
+            if busy:
+                bar.set_activity("thinking", busy=True)
+            else:
+                bar.set_activity("completed", busy=False)
+                # auto-hide after brief moment
+                self.set_timer(1.2, lambda: bar.set_activity("idle", busy=False))
+        except Exception:
+            pass
         self._refresh_chrome()
 
 
@@ -281,6 +297,16 @@ class HexApp(Stage2Mixin, App[None]):
             self.query_one(ChatLog).append_tool_card(name, status, detail, output=output, error=error)
         except Exception:
             self.query_one(ChatLog).append_entry(e)
+        try:
+            phase = name if status == "running" else ("completed" if status in ("ok", "completed") else status)
+            self.query_one(ActivityBar).set_activity(
+                name if status == "running" else phase,
+                busy=status == "running" or self.state.busy,
+                detail=detail or "",
+            )
+        except Exception:
+            pass
+
 
     def _post_error(self, text: str) -> None:
         e = self.state.add("error", text)

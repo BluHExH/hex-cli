@@ -15,29 +15,31 @@ class HelpDialog(ModalScreen[None]):
     BINDINGS = [("escape", "dismiss", "Close"), ("ctrl+h", "dismiss", "Close")]
 
     def compose(self) -> ComposeResult:
+        help_text = (
+            "[bold]Shortcuts[/bold]\n"
+            "  Ctrl+C / Ctrl+Q   Quit\n"
+            "  Ctrl+L           Clear conversation\n"
+            "  Ctrl+N           New session\n"
+            "  Ctrl+P           Model browser\n"
+            "  Ctrl+B           Toggle sidebar\n"
+            "  Ctrl+H           This help\n"
+            "  Escape           Close dialog\n"
+            "  Enter            Submit prompt\n\n"
+            "[bold]Slash commands[/bold]\n"
+            "  /connect       Connect provider + API key\n"
+            "  /models        Browse / search models\n"
+            "  /providers     List providers\n"
+            "  /disconnect    Remove stored key\n"
+            "  /settings      Settings overview\n"
+            "  /help /clear /status /exit\n\n"
+            "[bold]Tips[/bold]\n"
+            "  • HEX opens without an API key — use /connect first.\n"
+            "  • Free models: OpenRouter ids ending in :free, or Ollama.\n"
+            "  • File writes and shell commands require approval.\n"
+        )
         with Vertical(classes="dialog"):
             yield Label("HEX Help", classes="dialog-title")
-            yield Static(
-                "[bold]Shortcuts[/bold]\n"
-                "  Ctrl+C / Ctrl+Q   Quit\n"
-                "  Ctrl+L           Clear conversation\n"
-                "  Ctrl+N           New session (placeholder)\n"
-                "  Ctrl+P           Provider / model picker\n"
-                "  Ctrl+B           Toggle sidebar\n"
-                "  Ctrl+H           This help\n"
-                "  Escape           Close dialog\n"
-                "  Enter            Submit prompt\n"
-                "  Ctrl+J           Newline in prompt\n\n"
-                "[bold]Slash commands[/bold] (type in prompt)\n"
-                "  /help  /exit  /clear  /status\n"
-                "  /model <id>   /provider <name>\n\n"
-                "[bold]Tips[/bold]\n"
-                "  • File writes and shell commands require approval.\n"
-                "  • Use OpenRouter :free models for $0 usage.\n"
-                "  • Run `hex doctor` outside the TUI for diagnostics.\n",
-                classes="dialog-body",
-                markup=True,
-            )
+            yield Static(help_text, classes="dialog-body", markup=True)
             with Horizontal(classes="dialog-buttons"):
                 yield Button("Close", variant="primary", id="btn-close")
 

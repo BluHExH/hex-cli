@@ -251,14 +251,21 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 class BaseProvider:
     """Thin wrapper around the OpenAI-compatible Chat Completions API."""
 
-    def __init__(self, config: ProviderConfig, model: str | None = None):
+    def __init__(
+        self,
+        config: ProviderConfig,
+        model: str | None = None,
+        *,
+        require_key: bool = True,
+    ):
         self.config = config
         self.model = model or config.default_model
         api_key = get_api_key(config)
-        if not api_key and config.name != "ollama":
+        self._has_key = bool(api_key) or config.name in ("ollama", "custom")
+        if require_key and not self._has_key:
             raise ValueError(
-                f"API key not found. Set the environment variable {config.api_key_env} "
-                f"or add it to a .env file. See `hex doctor` for diagnostics."
+                f"API key not found. Use /connect in the TUI, set {config.api_key_env}, "
+                "or add it to ~/.hex/credentials.json. See `hex doctor`."
             )
         self._client = OpenAI(
             api_key=api_key or "ollama",
@@ -376,5 +383,10 @@ class ProviderError(Exception):
     pass
 
 
-def create_provider(config: ProviderConfig, model: str | None = None) -> BaseProvider:
-    return BaseProvider(config, model=model)
+def create_provider(
+    config: ProviderConfig,
+    model: str | None = None,
+    *,
+    require_key: bool = True,
+) -> BaseProvider:
+    return BaseProvider(config, model=model, require_key=require_key)

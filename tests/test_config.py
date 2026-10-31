@@ -14,13 +14,13 @@ def test_default_config_has_providers():
     cfg = AppConfig()
     assert "openai" in cfg.providers
     assert "ollama" in cfg.providers
-    assert cfg.active_provider == "openai"
+    assert cfg.active_provider == "openrouter"
 
 
 def test_get_active_provider():
     cfg = AppConfig()
     p = cfg.get_active_provider()
-    assert p.name == "openai"
+    assert p.name == "openrouter"
     assert p.default_model
 
 
@@ -58,4 +58,4 @@ def test_corrupt_config_falls_back(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr("hex_cli.config.get_config_path", lambda: path)
     cfg = load_config()
     assert isinstance(cfg, AppConfig)
-    assert cfg.active_provider == "openai"
+    assert cfg.active_provider == "openrouter"

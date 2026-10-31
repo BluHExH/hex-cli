@@ -28,6 +28,23 @@ Inspired by tools such as OpenCode and OpenHands, HEX is an original implementat
 - `hex doctor` diagnostics
 - Automated test suite (no paid API required for unit tests)
 
+
+## Stage 2 — Providers & models
+
+HEX opens **without** an API key. Inside the TUI:
+
+| Command | Action |
+|---------|--------|
+| `/connect` | Choose provider and enter API key |
+| `/models` | Browse / search models (F = free only) |
+| `/providers` | List connection status |
+| `/disconnect` | Remove stored credential |
+| `/settings` | Show settings overview |
+
+Supported providers: OpenRouter, OpenAI, Google Gemini, Groq, NVIDIA, Cerebras, Mistral, Anthropic, Ollama, Custom OpenAI-compatible.
+
+Credentials are stored in `~/.hex/credentials.json` (owner-only permissions when the OS allows). Environment variables always override stored keys. Free models are labeled only when the provider marks them free (e.g. OpenRouter `:free`) or for local Ollama — paid models are never labeled free.
+
 ## Quick start (TUI)
 
 ```powershell

@@ -10,7 +10,7 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
-from textual.widgets import Footer, Static
+from textual.widgets import Static
 
 from hex_cli import __version__
 from hex_cli.agent.loop import AgentLoop
@@ -22,16 +22,16 @@ from hex_cli.config import (
     save_config,
 )
 from hex_cli.permissions import PermissionManager, PermissionRequest
-from hex_cli.providers.base import create_provider
+from hex_cli..providers.base import create_provider
+from hex_cli.providers.catalog import OPENROUTER_FREE_FALLBACK
+from hex_cli.tui.stage2_mixin import Stage2Mixin
 from hex_cli.tui.state import SessionState
-from hex_cli.tui.theme import HEX_CSS
+from hex_cli.tui.theme import HEX_CSS, HEX_LOGO
 from hex_cli.tui.widgets.chat import ChatLog
 from hex_cli.tui.widgets.dialogs import HelpDialog, PermissionDialog, SelectDialog
 from hex_cli.tui.widgets.header import HeaderBar
 from hex_cli.tui.widgets.input_panel import InputPanel, PromptSubmitted
-from hex_cli.tui.widgets.sidebar import Sidebar
-from hex_cli.tui.stage2_mixin import Stage2Mixin
-from hex_cli.providers.catalog import OPENROUTER_FREE_FALLBACK
+from hex_cli.tui.widgets.sidebar import NewSessionRequested, SessionSelected, Sidebar
 
 FREE_MODEL_PRESETS = list(OPENROUTER_FREE_FALLBACK)
 
@@ -62,7 +62,11 @@ class HexApp(Stage2Mixin, App[None]):
         self.project_root = project_root.resolve()
         self.config = config
         provider_cfg = config.get_active_provider()
-        model = model_override or getattr(config, "selected_model", None) or provider_cfg.default_model
+        model = (
+            model_override
+            or getattr(config, "selected_model", None)
+            or provider_cfg.default_model
+        )
         self.state = SessionState(
             project_root=self.project_root,
             provider_name=provider_cfg.name,
@@ -85,6 +89,7 @@ class HexApp(Stage2Mixin, App[None]):
 
     def on_mount(self) -> None:
         self._refresh_chrome()
+        self._refresh_sessions_sidebar()
         self.query_one(InputPanel).focus_input()
         self.set_interval(0.5, self._tick_footer)
         self.call_later(self._boot_provider)
@@ -103,21 +108,34 @@ class HexApp(Stage2Mixin, App[None]):
             if self.state.connected:
                 self._setup_agent()
                 self.state.status_message = "Ready"
+                self._show_banner()
                 self._post_system(
-                    f"Connected \u00b7 {pcfg.name} \u00b7 {self.state.model}. "
+                    f"Connected · {pcfg.name} · {self.state.model}. "
                     "Describe a coding task, or type /models to switch models."
                 )
             else:
                 self._agent = None
                 self.state.status_message = "Not connected"
+                self._show_banner()
                 self._show_onboarding()
         except Exception as e:
             self.state.connected = False
             self._agent = None
             self.state.status_message = "Provider error"
             self._post_error(str(e))
+            self._show_banner()
             self._show_onboarding()
+        self._refresh_sessions_sidebar()
         self._refresh_chrome()
+
+    def _show_banner(self) -> None:
+        logo = HEX_LOGO.strip("\n")
+        meta = (
+            f"HEX CLI v{__version__}  ·  {self.project_root}\n"
+            f"{self.state.provider_name} · {self.state.model}\n"
+            f"{'Connected' if self.state.connected else 'Not connected — type /connect'}"
+        )
+        self._post_system(f"{logo}\n\n{meta}")
 
     def _setup_agent(self) -> None:
         assert self._provider is not None
@@ -204,17 +222,24 @@ class HexApp(Stage2Mixin, App[None]):
             side = self.query_one(Sidebar)
             side.provider = self.state.provider_name
             side.model = self.state.model
+            side.connected = self.state.connected
             side.collapsed = not self.state.sidebar_visible
         except Exception:
             pass
         self._tick_footer()
 
+    def _refresh_sessions_sidebar(self) -> None:
+        try:
+            self.query_one(Sidebar).set_sessions(self.state.session_names())
+        except Exception:
+            pass
+
     def _tick_footer(self) -> None:
         try:
-            busy = "\u25cf busy" if self.state.busy else "\u25cf idle"
+            busy = "● busy" if self.state.busy else "● idle"
             text = (
-                f" {self.state.model}  \u00b7  {self.state.provider_name}  \u00b7  "
-                f"{self.project_root.name}  \u00b7  {busy}  \u00b7  "
+                f" {self.state.model}  ·  {self.state.provider_name}  ·  "
+                f"{self.project_root.name}  ·  {busy}  ·  "
                 f"{self.state.status_message}"
             )
             self.query_one("#footer-bar", Static).update(text)
@@ -227,7 +252,7 @@ class HexApp(Stage2Mixin, App[None]):
         if not text:
             return
         if self.state.busy:
-            self._post_status("Still working \u2014 wait for the current task to finish.")
+            self._post_status("Still working — wait for the current task to finish.")
             return
 
         lower = text.lower().strip()
@@ -239,6 +264,14 @@ class HexApp(Stage2Mixin, App[None]):
             return
         if lower == "/clear":
             self.action_clear_chat()
+            return
+        if lower in ("/new", "/session new"):
+            self.action_new_session()
+            return
+        if lower in ("/sessions", "/session"):
+            rows = self.state.session_names()
+            lines = [f"{'*' if a else ' '} {n} ({i})" for i, n, a in rows]
+            self._post_system("Sessions:\n" + "\n".join(lines) if lines else "No sessions.")
             return
         if lower == "/status":
             self._post_system(
@@ -285,7 +318,7 @@ class HexApp(Stage2Mixin, App[None]):
     @work(thread=True)
     def run_agent_task(self, text: str) -> None:
         self.state.busy = True
-        self.state.status_message = "Thinking\u2026"
+        self.state.status_message = "Thinking…"
         self.call_from_thread(self._refresh_chrome)
         try:
             if self._agent is None:
@@ -303,7 +336,7 @@ class HexApp(Stage2Mixin, App[None]):
 
     def action_quit_app(self) -> None:
         if self.state.busy:
-            self._post_status("Agent still running \u2014 press Ctrl+C again to force quit.")
+            self._post_status("Agent still running — press Ctrl+C again to force quit.")
             self.state.busy = False
             return
         self.exit()
@@ -311,13 +344,55 @@ class HexApp(Stage2Mixin, App[None]):
     def action_clear_chat(self) -> None:
         self.state.clear_conversation()
         if self._agent:
-            self._agent._init_system()
-        self.query_one(ChatLog).clear_messages()
+            try:
+                self._agent._init_system()
+            except Exception:
+                pass
+        self.query_one(ChatLog).clear_messages(
+            banner="[dim]Conversation cleared. Ask HEX something…[/dim]"
+        )
         self._refresh_chrome()
+        self.query_one(InputPanel).focus_input()
 
     def action_new_session(self) -> None:
-        self.action_clear_chat()
-        self._post_system("New session started.")
+        session = self.state.new_session()
+        if self._agent:
+            try:
+                self._agent._init_system()
+            except Exception:
+                pass
+        self.query_one(ChatLog).clear_messages(
+            banner=(
+                f"[bold #c084fc]{session.name}[/]\n"
+                "[dim]New session ready. Describe a coding task or type / for commands.[/]"
+            )
+        )
+        self._refresh_sessions_sidebar()
+        self._refresh_chrome()
+        self.query_one(InputPanel).focus_input()
+
+    @on(NewSessionRequested)
+    def on_new_session_requested(self, _event: NewSessionRequested) -> None:
+        self.action_new_session()
+
+    @on(SessionSelected)
+    def on_session_selected(self, event: SessionSelected) -> None:
+        if not self.state.switch_session(event.session_id):
+            return
+        log = self.query_one(ChatLog)
+        entries = list(self.state.entries)
+        if not entries:
+            log.clear_messages()
+        else:
+            try:
+                log.remove_children()
+                log._has_welcome = False
+            except Exception:
+                pass
+            for e in entries:
+                log.append_entry(e)
+        self._refresh_sessions_sidebar()
+        self._refresh_chrome()
 
     def action_toggle_sidebar(self) -> None:
         self.state.sidebar_visible = not self.state.sidebar_visible

@@ -54,6 +54,11 @@ def _setup_permissions(config: AppConfig, root: Path) -> PermissionManager:
 def main(
     ctx: typer.Context,
     version: bool = typer.Option(False, "--version", "-V", help="Show version and exit"),
+    classic: bool = typer.Option(
+        False,
+        "--classic",
+        help="Use the classic line-oriented prompt instead of the full-screen TUI",
+    ),
 ) -> None:
     if version:
         ui.print_version()
@@ -62,11 +67,36 @@ def main(
     if ctx.invoked_subcommand is not None:
         return
 
-    # Default: start interactive session
-    _start_chat()
+    # Default: full-screen TUI (Stage 1)
+    if classic:
+        _start_chat_classic()
+    else:
+        _start_tui()
 
 
-def _start_chat(model_override: str | None = None) -> None:
+def _start_tui(model_override: str | None = None) -> None:
+    """Launch the Textual full-screen interface."""
+    try:
+        from hex_cli.tui import run_tui
+    except ImportError as e:
+        ui.print_error(f"TUI dependencies missing: {e}")
+        ui.print_info("Install with: pip install textual")
+        ui.print_info("Falling back to classic mode…")
+        _start_chat_classic(model_override=model_override)
+        return
+
+    root = _project_root()
+    load_dotenv_if_present(root)
+    try:
+        run_tui(project_root=root, model=model_override)
+    except Exception as e:
+        ui.print_error(f"TUI failed to start: {e}")
+        ui.print_info("Try classic mode: hex --classic")
+        raise typer.Exit(1)
+
+
+def _start_chat_classic(model_override: str | None = None) -> None:
+    """Classic Rich line-prompt session (pre-TUI)."""
     root = _project_root()
     load_dotenv_if_present(root)
     config = load_config()
@@ -195,9 +225,17 @@ def _show_status(config: AppConfig, root: Path, model: str) -> None:
 @app.command()
 def chat(
     model: Optional[str] = typer.Option(None, "--model", "-m", help="Model override"),
+    classic: bool = typer.Option(
+        False,
+        "--classic",
+        help="Use the classic line-oriented prompt instead of the full-screen TUI",
+    ),
 ) -> None:
-    """Start an interactive coding session (default)."""
-    _start_chat(model_override=model)
+    """Start an interactive coding session (default: full-screen TUI)."""
+    if classic:
+        _start_chat_classic(model_override=model)
+    else:
+        _start_tui(model_override=model)
 
 
 @app.command()

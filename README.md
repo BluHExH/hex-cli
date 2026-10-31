@@ -16,15 +16,44 @@ Inspired by tools such as OpenCode and OpenHands, HEX is an original implementat
 
 ## Features
 
+- **Full-screen TUI** (Stage 1) — OpenCode-inspired terminal UI with header, sidebar, chat panel, and status bar
 - Natural-language coding sessions in the project directory
 - Multi-provider LLM support (OpenAI-compatible APIs, Ollama local models, OpenRouter, Groq)
+- Built-in **free model presets** (OpenRouter `:free` models such as Nemotron 3 Ultra, Laguna, North Mini Code)
 - Structured tool calling: list/read/search/write/edit files, run commands, git status/diff, tests
-- **Permission-first** workflow — file writes and shell commands require approval
+- **Permission-first** workflow — file writes and shell commands require approval (modal dialogs in TUI)
 - Path traversal and symlink-escape prevention
 - Diff previews before edits
 - Project context awareness (respects common ignore patterns)
 - `hex doctor` diagnostics
 - Automated test suite (no paid API required for unit tests)
+
+## Quick start (TUI)
+
+```powershell
+# After install + API key
+$env:OPENROUTER_API_KEY = "sk-or-..."
+hex                 # launches full-screen TUI
+# or
+hex chat
+hex --classic       # old line-oriented prompt
+```
+
+### TUI keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+C` / `Ctrl+Q` | Quit |
+| `Ctrl+L` | Clear conversation |
+| `Ctrl+N` | New session |
+| `Ctrl+P` | Provider / model picker |
+| `Ctrl+B` | Toggle sidebar |
+| `Ctrl+H` | Help |
+| `Enter` | Submit prompt |
+| `Ctrl+J` | Newline in prompt |
+| `Escape` | Close dialog / focus input |
+
+Slash commands still work inside the prompt: `/model`, `/provider`, `/status`, `/clear`, `/help`, `/exit`.
 
 ## Requirements
 
@@ -37,7 +66,7 @@ Inspired by tools such as OpenCode and OpenHands, HEX is an original implementat
 
 ```powershell
 # Clone
-git clone https://github.com/YOUR_USER/hex-cli.git
+git clone https://github.com/BluHExH/hex-cli.git
 cd hex-cli
 
 # Virtual environment
@@ -56,23 +85,26 @@ pip install -e ".[dev]"
 # Verify
 hex --help
 hex doctor
+hex                 # full-screen TUI
 ```
 
 ### Run without activating the venv
 
 ```powershell
 .\.venv\Scripts\hex.exe doctor
+.\.venv\Scripts\hex.exe
 ```
 
 ### Linux / macOS
 
 ```bash
-git clone https://github.com/YOUR_USER/hex-cli.git
+git clone https://github.com/BluHExH/hex-cli.git
 cd hex-cli
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 hex --help
+hex
 ```
 
 ## Provider setup

@@ -29,6 +29,19 @@ Inspired by tools such as OpenCode and OpenHands, HEX is an original implementat
 - Automated test suite (no paid API required for unit tests)
 
 
+
+## Stage 2.5 — Professional TUI
+
+HEX launches a full-screen Textual interface with:
+
+- HEX ASCII banner on startup
+- Header (brand, project, model, online/offline)
+- Collapsible sidebar (sessions, project, provider, model)
+- Chat workspace with distinct message styles and tool status
+- Bottom multiline input (`Enter` send, suggestions on `/`)
+- Commands: `/connect` `/models` `/providers` `/new` `/clear` `/sessions` `/help`
+- Fixed: chat widget ID lifecycle (no DuplicateIds on clear/new session)
+
 ## Stage 2 — Providers & models
 
 HEX opens **without** an API key. Inside the TUI:

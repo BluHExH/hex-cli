@@ -19,14 +19,15 @@ class HeaderBar(Static):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="header"):
-            yield Static(" HEX ", id="header-brand")
+            yield Static(" ◆ HEX ", id="header-brand")
             yield Static("", id="header-project")
             yield Static("", id="header-provider")
-            yield Static("● offline", id="header-status", classes="status-err")
+            yield Static("○ offline", id="header-status", classes="status-err")
 
     def watch_project(self, value: str) -> None:
         try:
-            self.query_one("#header-project", Static).update(f"📁 {value}")
+            name = value.replace("\\", "/").rstrip("/").split("/")[-1] if value else ""
+            self.query_one("#header-project", Static).update(f"  {name}")
         except Exception:
             pass
 
@@ -37,7 +38,7 @@ class HeaderBar(Static):
         self._refresh_provider()
 
     def watch_status(self, value: str) -> None:
-        pass  # status text lives in footer primarily
+        pass
 
     def watch_connected(self, value: bool) -> None:
         try:
@@ -46,14 +47,17 @@ class HeaderBar(Static):
                 w.update("● online")
                 w.set_classes("status-ok")
             else:
-                w.update("● offline")
+                w.update("○ offline")
                 w.set_classes("status-err")
         except Exception:
             pass
 
     def _refresh_provider(self) -> None:
         try:
-            label = f"{self.provider} · {self.model}" if self.model else self.provider
+            model = self.model
+            if len(model) > 36:
+                model = model[:33] + "…"
+            label = f"{self.provider} · {model}" if model else self.provider
             self.query_one("#header-provider", Static).update(label)
         except Exception:
             pass

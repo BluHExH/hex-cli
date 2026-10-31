@@ -2,8 +2,9 @@
 
 Discovers models from provider APIs when possible. Free-model detection is
 conservative: only models explicitly marked free by the provider (e.g.
-OpenRouter `:free` suffix or zero pricing) are labeled free.
-Never""
+OpenRouter :free suffix or zero pricing) are labeled free.
+Never invent pricing.
+"""
 
 from __future__ import annotations
 
@@ -32,8 +33,8 @@ class ModelInfo:
 
     def label(self) -> str:
         tier = {"free": "FREE", "paid": "PAID", "unknown": "?"}.get(self.cost_tier, "?")
-        ctx = f" \u00b7 {self.context_length // 1000}k" if self.context_length else ""
-        tools = " \u00b7 tools" if self.supports_tools else ""
+        ctx = f" · {self.context_length // 1000}k" if self.context_length else ""
+        tools = " · tools" if self.supports_tools else ""
         return f"[{tier}] {self.id}{ctx}{tools}"
 
 

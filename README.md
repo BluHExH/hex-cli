@@ -31,6 +31,25 @@ Inspired by tools such as OpenCode and OpenHands, HEX is an original implementat
   HEX CLI — AI Coding Agent
 ```
 
+## OpenCode parity notes (v0.6.2)
+
+Closer to OpenCode TUI workflows:
+
+| OpenCode | HEX |
+|----------|-----|
+| Ctrl+P command palette | Yes — filterable palette |
+| Multiline composer Enter / Shift+Enter | Yes |
+| `/` slash commands | Yes + custom commands |
+| `!` shell into chat | Yes (permission-gated) |
+| `@file` references | Yes (content injected, size-capped) |
+| Sessions sidebar | Yes |
+| Agents / models | Yes (`/agent`, `/models`, palette) |
+| Export / compact | `/export`, `/compact` |
+| Stop generation | Ctrl+. when busy |
+| MCP / Skills / LSP | Present (stdio MCP, skills, LSP client) |
+
+Not full OpenCode parity: no external `$EDITOR` compose, no redo/git-backed undo stack, no desktop notifications, no theme pack system, no team/multi-tab sessions.
+
 ## UI reconstruction (v0.6.1)
 
 OpenCode-inspired full-screen layout:

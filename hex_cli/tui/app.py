@@ -29,6 +29,7 @@ from hex_cli.tui.widgets.chat import ChatLog
 from hex_cli.tui.widgets.dialogs import HelpDialog, PermissionDialog, SelectDialog
 from hex_cli.tui.widgets.header import HeaderBar
 from hex_cli.tui.widgets.input_panel import InputPanel, PromptSubmitted
+from hex_cli.tui.widgets.command_palette import CommandPalette
 from hex_cli.tui.widgets.provider_dialogs import (
     ConnectProviderDialog,
     ModelBrowserDialog,
@@ -60,7 +61,8 @@ class HexApp(Stage2Mixin, App[None]):
         Binding("ctrl+q", "quit_app", "Quit"),
         Binding("ctrl+l", "clear_chat", "Clear"),
         Binding("ctrl+n", "new_session", "New"),
-        Binding("ctrl+p", "pick_model", "Models"),
+        Binding("ctrl+p", "command_palette", "Palette"),
+        Binding("ctrl+period", "stop_agent", "Stop", show=False),
         Binding("ctrl+b", "toggle_sidebar", "Sidebar"),
         Binding("ctrl+h", "show_help", "Help"),
         Binding("ctrl+shift+a", "cycle_agent", "Agent", show=False),
@@ -334,6 +336,17 @@ class HexApp(Stage2Mixin, App[None]):
             self._post_status("Still working — wait for the current task to finish.")
             return
 
+
+        # OpenCode-style: leading ! runs a shell command into the conversation
+        if text.startswith("!") and not text.startswith("!/"):
+            cmd = text[1:].strip()
+            if not cmd:
+                self._post_status("Usage: ! <shell command>")
+                return
+            self._post_user(text)
+            self._run_bang_command(cmd)
+            return
+
         lower = text.lower().strip()
         if lower in ("/exit", "/quit", "exit", "quit"):
             self.exit()
@@ -579,6 +592,12 @@ class HexApp(Stage2Mixin, App[None]):
             self._post_system("LSP:\n" + "\n".join(lines))
             return
 
+        if lower in ("/export",):
+            self._export_conversation()
+            return
+        if lower in ("/compact", "/summarize"):
+            self._compact_session()
+            return
         if lower in ("/diff", "/review"):
             if self._agent and self._agent.changes.records:
                 self._post_system(self._agent.changes.all_diffs()[:8000])
@@ -661,7 +680,7 @@ class HexApp(Stage2Mixin, App[None]):
                 return
 
         self._post_user(text)
-        self.run_agent_task(text)
+        self.run_agent_task(self._expand_at_files(text))
 
     @work(thread=True)
     def run_agent_task(self, text: str, plan_only: bool = False) -> None:
@@ -782,6 +801,162 @@ class HexApp(Stage2Mixin, App[None]):
                 pass
         self._post_system(f"Agent: {nxt}")
         self._refresh_chrome()
+
+
+
+    def _run_bang_command(self, command: str) -> None:
+        """Execute !command via CommandTools (permission-gated)."""
+        try:
+            from hex_cli.tools.commands import CommandTools
+            from hex_cli.permissions import PermissionManager
+            pm = PermissionManager(self.config, self.project_root)
+            try:
+                pm.set_ask_callback(lambda req: self._ask_permission_sync(req))
+            except Exception:
+                pass
+            tools = CommandTools(self.project_root, pm, self.config)
+            self._post_tool("run_command", "running", command[:80])
+            result = tools.run_command(command)
+            if result.get("skipped"):
+                self._post_tool("run_command", "skipped", str(result.get("error", "denied"))[:80])
+            elif result.get("ok"):
+                out = (result.get("stdout") or result.get("output") or "")[:4000]
+                self._post_tool("run_command", "ok", f"exit {result.get('exit_code', 0)}")
+                if out:
+                    self._post_system(out)
+            else:
+                self._post_tool("run_command", "error", str(result.get("error", "failed"))[:80])
+                err = result.get("stderr") or result.get("error") or ""
+                if err:
+                    self._post_error(str(err)[:2000])
+        except Exception as exc:
+            self._post_error(f"!command failed: {exc}")
+
+    def _expand_at_files(self, text: str) -> str:
+        """Expand @path references by appending file contents (read-only, size-capped)."""
+        import re
+        refs = re.findall(r"@([\w./\\-]+)", text)
+        if not refs:
+            return text
+        extras = []
+        for ref in refs[:8]:
+            path = (self.project_root / ref).resolve()
+            try:
+                path.relative_to(self.project_root.resolve())
+            except ValueError:
+                extras.append(f"[skipped {ref}: outside project]")
+                continue
+            if not path.is_file():
+                extras.append(f"[skipped {ref}: not a file]")
+                continue
+            try:
+                raw = path.read_text(encoding="utf-8", errors="replace")
+                if len(raw) > 12000:
+                    raw = raw[:12000] + "\n…(truncated)"
+                extras.append(f"--- file: {ref} ---\n{raw}")
+            except OSError as e:
+                extras.append(f"[skipped {ref}: {e}]")
+        if not extras:
+            return text
+        return text + "\n\n" + "\n\n".join(extras)
+
+
+    def action_command_palette(self) -> None:
+        def _done(action_id: str | None) -> None:
+            if action_id:
+                self._run_palette_action(action_id)
+        self.push_screen(CommandPalette(), _done)
+
+    def _run_palette_action(self, action_id: str) -> None:
+        if action_id == "new_session":
+            self.action_new_session()
+        elif action_id == "sessions":
+            rows = self.state.session_names()
+            lines = [f"{'*' if a else ' '} {n} ({i})" for i, n, a in rows]
+            self._post_system("Sessions:\n" + ("\n".join(lines) if lines else "No sessions."))
+        elif action_id == "models":
+            self.action_pick_model()
+        elif action_id == "agents":
+            from hex_cli.agents import list_agents
+            cur = getattr(self.state, "agent", "general")
+            lines = [f"{'*' if a.id == cur else ' '} {a.display_name} ({a.id}) — {a.description}" for a in list_agents()]
+            self._post_system("Agents:\n" + "\n".join(lines) + "\n\nSwitch: /agent <name>")
+        elif action_id == "connect":
+            self.action_connect_provider()
+        elif action_id == "providers":
+            self.action_show_providers()
+        elif action_id == "settings":
+            self.action_show_settings()
+        elif action_id == "export":
+            self._export_conversation()
+        elif action_id == "compact":
+            self._compact_session()
+        elif action_id == "clear":
+            self.action_clear_chat()
+        elif action_id == "toggle_sidebar":
+            self.action_toggle_sidebar()
+        elif action_id == "help":
+            self.action_show_help()
+        elif action_id == "quit":
+            self.action_quit_app()
+        elif action_id in ("init", "diff", "undo", "tools", "permissions", "save", "history", "mcp", "skills"):
+            class _Evt:
+                def __init__(self, t: str) -> None:
+                    self.text = t
+            self.handle_prompt(_Evt("/" + action_id))
+        else:
+            self._post_status(f"Unknown action: {action_id}")
+
+    def action_stop_agent(self) -> None:
+        if self._agent and self.state.busy:
+            self._agent.request_cancel()
+            self._post_status("Cancellation requested…")
+        else:
+            self._post_status("Nothing running to stop.")
+
+    def _export_conversation(self) -> None:
+        import time
+        lines = [
+            "# HEX session export",
+            "",
+            f"Project: `{self.project_root}`",
+            f"Model: {self.state.model}",
+            f"Agent: {getattr(self.state, 'agent', 'general')}",
+            "",
+            "---",
+            "",
+        ]
+        for e in self.state.entries:
+            lines.append(f"### {e.kind.upper()}")
+            lines.append("")
+            lines.append(e.text)
+            lines.append("")
+        out = self.project_root / f".hex-export-{int(time.time())}.md"
+        try:
+            out.write_text("\n".join(lines), encoding="utf-8")
+            self._post_system(f"Exported conversation → {out.name}")
+        except OSError as exc:
+            self._post_error(f"Export failed: {exc}")
+
+    def _compact_session(self) -> None:
+        entries = list(self.state.entries)
+        if len(entries) <= 4:
+            self._post_status("Session already short; nothing to compact.")
+            return
+        keep = entries[-4:]
+        summary_bits = []
+        for e in entries[:-4]:
+            if e.kind in ("user", "assistant") and e.text:
+                summary_bits.append(f"- [{e.kind}] {e.text[:120].replace(chr(10), ' ')}")
+        self.state.clear_conversation()
+        self.query_one(ChatLog).clear_messages(banner="[dim]Session compacted.[/]")
+        if summary_bits:
+            self._post_system("Prior context summary:\n" + "\n".join(summary_bits[:20]))
+        for e in keep:
+            self.state.add(e.kind, e.text, **(e.meta or {}))
+            self.query_one(ChatLog).append_entry(e)
+        self._post_status("Compacted older messages into a short summary.")
+
 
     def action_focus_input(self) -> None:
         self.query_one(InputPanel).focus_input()

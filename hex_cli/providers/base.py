@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, RateLimitError
@@ -184,6 +184,65 @@ class BaseProvider:
             tool_calls=tool_calls,
             finish_reason=choice.finish_reason,
         )
+
+    def stream_chat(
+        self,
+        messages: list[ChatMessage],
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float = 0.2,
+        on_event: Callable[[Any], None] | None = None,
+    ) -> ProviderResponse:
+        """Stream a completion when the provider supports it.
+
+        Emits StreamEngine events via on_event. Falls back to a single
+        non-streaming call when streaming fails or is unavailable.
+        """
+        from hex_cli.streaming.engine import StreamEngine, StreamEvent, StreamKind
+
+        payload_messages = [m.to_dict() for m in messages]
+        kwargs: dict[str, Any] = {
+            "model": self.model,
+            "messages": payload_messages,
+            "temperature": temperature,
+            "stream": True,
+        }
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+
+        engine = StreamEngine(on_event=on_event)
+        try:
+            stream = self._client.chat.completions.create(**kwargs)
+            for chunk in stream:
+                if engine.cancelled:
+                    break
+                engine.handle_openai_chunk(chunk)
+            # Build final ProviderResponse from accumulated state
+            tool_calls: list[ToolCall] = []
+            for buf in engine._tool_buffers.values():
+                if not buf.get("id"):
+                    continue
+                try:
+                    args = json.loads(buf.get("arguments") or "{}")
+                except json.JSONDecodeError:
+                    args = {"_raw": buf.get("arguments")}
+                tool_calls.append(
+                    ToolCall(
+                        id=buf["id"],
+                        name=buf.get("name") or "unknown",
+                        arguments=args if isinstance(args, dict) else {"_raw": args},
+                    )
+                )
+            return ProviderResponse(
+                content=engine.accumulated_text or None,
+                tool_calls=tool_calls,
+                finish_reason="stop",
+            )
+        except Exception:
+            # Honest fallback: non-streaming request
+            resp = self.chat(messages, tools=tools, temperature=temperature)
+            engine.finalize_non_streaming(resp.content, resp.tool_calls)
+            return resp
 
     def list_models(self) -> list[str]:
         """Best-effort list of models from the provider."""

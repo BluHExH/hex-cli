@@ -361,14 +361,99 @@ class HexApp(Stage2Mixin, App[None]):
         if lower in ("/settings",):
             self.action_show_settings()
             return
-        if lower in ("/plan",):
-            # Next free-text is handled as plan — if args provided, run immediately
+        if lower in ("/plan",) or lower.startswith("/plan "):
             rest = text.split(maxsplit=1)
+            if self._agent:
+                self._agent.set_agent("plan")
+                self.state.agent = "plan"
+                self.state.active_session.agent = "plan"
             if len(rest) == 2:
                 self._post_user(rest[1])
                 self.run_agent_task(rest[1], plan_only=True)
             else:
-                self._post_status("Usage: /plan <task description>")
+                self._post_status("Switched to Plan agent. Usage: /plan <task>")
+            return
+        if lower in ("/build",) or lower.startswith("/build "):
+            rest = text.split(maxsplit=1)
+            if self._agent:
+                self._agent.set_agent("build")
+                self.state.agent = "build"
+                self.state.active_session.agent = "build"
+            if len(rest) == 2:
+                self._post_user(rest[1])
+                self.run_agent_task(rest[1], plan_only=False)
+            else:
+                self._post_status("Switched to Build agent. Usage: /build <task>")
+            return
+        if lower in ("/explore",) or lower.startswith("/explore "):
+            rest = text.split(maxsplit=1)
+            if self._agent:
+                self._agent.set_agent("explore")
+                self.state.agent = "explore"
+                self.state.active_session.agent = "explore"
+            if len(rest) == 2:
+                self._post_user(rest[1])
+                self.run_agent_task(rest[1], plan_only=False)
+            else:
+                self._post_status("Switched to Explore agent. Usage: /explore <query>")
+            return
+        if lower in ("/agent", "/agents"):
+            from hex_cli.agents import list_agents
+            lines = []
+            for a in list_agents():
+                mark = "*" if a.id == getattr(self.state, "agent", "general") else " "
+                lines.append(f"{mark} {a.display_name} ({a.id}) — {a.description}")
+            self._post_system("Agents:\n" + "\n".join(lines) + "\n\nSwitch: /agent <build|plan|explore|general>")
+            return
+        if lower.startswith("/agent "):
+            name = text.split(maxsplit=1)[1].strip().lower()
+            try:
+                if self._agent:
+                    profile = self._agent.set_agent(name)
+                    self.state.agent = profile.id
+                    self.state.active_session.agent = profile.id
+                    self._post_system(f"Active agent: {profile.display_name} — {profile.description}")
+                else:
+                    self.state.agent = name
+                    self._post_system(f"Agent set to {name} (will apply when agent starts)")
+            except Exception as e:
+                self._post_error(f"Unknown agent: {name} ({e})")
+            return
+        if lower in ("/save", "/session save"):
+            pid = self.state.persist_active()
+            self._post_system(f"Session saved (id={pid})")
+            return
+        if lower.startswith("/session rename "):
+            new_name = text.split(maxsplit=2)[2] if len(text.split(maxsplit=2)) > 2 else ""
+            if new_name and self.state.rename_session(self.state.active_session_id, new_name):
+                self._post_system(f"Renamed to: {new_name}")
+                self._refresh_sessions_sidebar()
+            else:
+                self._post_status("Usage: /session rename <name>")
+            return
+        if lower in ("/session delete",):
+            sid = self.state.active_session_id
+            if self.state.delete_session(sid):
+                self._post_system("Session deleted.")
+                self._refresh_sessions_sidebar()
+                self.action_clear_chat()
+            return
+        if lower.startswith("/session search ") or lower.startswith("/history "):
+            q = text.split(maxsplit=2)[-1] if " " in text else ""
+            hits = self.state.search_persistent(q)
+            if not hits:
+                self._post_status("No matching sessions.")
+            else:
+                lines = [f"• {h.name} [{h.agent}] {h.id[:8]} msgs={h.message_count}" for h in hits[:20]]
+                self._post_system("Search results:\n" + "\n".join(lines))
+            return
+        if lower in ("/history",):
+            hits = self.state.list_persistent()
+            if not hits:
+                self._post_status("No saved sessions for this project.")
+            else:
+                lines = [f"• {h.name} [{h.agent}] id={h.id[:8]} msgs={h.message_count}" for h in hits[:20]]
+                self._post_system("Saved sessions:\n" + "\n".join(lines))
             return
         if lower in ("/diff", "/review"):
             if self._agent and self._agent.changes.records:

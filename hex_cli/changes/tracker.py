@@ -159,3 +159,105 @@ class ChangeTracker:
     def clear(self) -> None:
         self.records.clear()
         self._originals.clear()
+
+    def file_paths(self) -> list[str]:
+        seen: dict[str, None] = {}
+        for r in self.records:
+            seen[r.path] = None
+        return list(seen.keys())
+
+    def get_latest_for(self, path: str) -> ChangeRecord | None:
+        rel = path.replace("\\", "/")
+        for r in reversed(self.records):
+            if r.path == rel:
+                return r
+        return None
+
+    def detect_external_modifications(self) -> list[dict[str, Any]]:
+        """Compare disk content against last known after-state for each tracked file."""
+        external: list[dict[str, Any]] = []
+        by_path: dict[str, ChangeRecord] = {}
+        for r in self.records:
+            by_path[r.path] = r
+        for rel, rec in by_path.items():
+            target = (self.root / rel).resolve()
+            try:
+                target.relative_to(self.root)
+            except ValueError:
+                continue
+            if not target.is_file():
+                if rec.after is not None:
+                    external.append({"path": rel, "reason": "file_missing_on_disk"})
+                continue
+            try:
+                current = target.read_text(encoding="utf-8")
+            except OSError as e:
+                external.append({"path": rel, "reason": f"read_error: {e}"})
+                continue
+            expected = rec.after if rec.after is not None else ""
+            if current != expected:
+                external.append({
+                    "path": rel,
+                    "reason": "content_diverged",
+                    "disk_len": len(current),
+                    "expected_len": len(expected),
+                })
+        return external
+
+    def reject_file(self, path: str) -> dict[str, Any]:
+        """Restore a single file to its pre-agent original (if known)."""
+        rel = path.replace("\\", "/")
+        if rel not in self._originals:
+            return {"ok": False, "error": f"No original snapshot for {rel}"}
+        original = self._originals[rel]
+        target = (self.root / rel).resolve()
+        try:
+            target.relative_to(self.root)
+        except ValueError:
+            return {"ok": False, "error": "Path escapes project root"}
+
+        # Refuse if external modification detected
+        latest = self.get_latest_for(rel)
+        if latest and target.is_file():
+            try:
+                current = target.read_text(encoding="utf-8")
+                if latest.after is not None and current != latest.after:
+                    return {
+                        "ok": False,
+                        "error": "External modification detected; refusing to overwrite",
+                        "path": rel,
+                    }
+            except OSError:
+                pass
+
+        try:
+            if original is None:
+                if target.is_file():
+                    target.unlink()
+                action = "deleted"
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(original, encoding="utf-8")
+                action = "restored"
+            # Drop records for this path
+            self.records = [r for r in self.records if r.path != rel]
+            self._originals.pop(rel, None)
+            return {"ok": True, "path": rel, "action": action}
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
+
+    def accept_file(self, path: str) -> dict[str, Any]:
+        """Mark a file's agent changes as accepted (drop from undo pool)."""
+        rel = path.replace("\\", "/")
+        if rel not in self._originals and not any(r.path == rel for r in self.records):
+            return {"ok": False, "error": f"No tracked changes for {rel}"}
+        self.records = [r for r in self.records if r.path != rel]
+        self._originals.pop(rel, None)
+        return {"ok": True, "path": rel, "action": "accepted"}
+
+    def review_summary(self) -> dict[str, Any]:
+        """Rich summary for the code-review UI."""
+        base = self.summary()
+        base["external"] = self.detect_external_modifications()
+        base["paths"] = self.file_paths()
+        return base

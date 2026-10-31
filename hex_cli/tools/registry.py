@@ -169,6 +169,59 @@ TOOL_SPECS: list[ToolSpec] = [
         risk="low",
     ),
     ToolSpec(
+        name="git_branches",
+        description="List local git branches and the current branch.",
+        parameters={"type": "object", "properties": {}},
+        risk="low",
+    ),
+    ToolSpec(
+        name="git_log",
+        description="Show recent commit history.",
+        parameters={
+            "type": "object",
+            "properties": {"max_count": {"type": "integer", "default": 15}},
+        },
+        risk="low",
+    ),
+    ToolSpec(
+        name="git_stage",
+        description="Stage selected files (or all). Requires approval.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "paths": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Paths to stage; omit for all",
+                }
+            },
+        },
+        risk="medium",
+    ),
+    ToolSpec(
+        name="git_commit",
+        description="Create a git commit with a message. Requires approval. Does not push.",
+        parameters={
+            "type": "object",
+            "properties": {"message": {"type": "string"}},
+            "required": ["message"],
+        },
+        risk="high",
+    ),
+    ToolSpec(
+        name="git_checkout",
+        description="Switch or create a local branch. Requires approval. Never force-discards.",
+        parameters={
+            "type": "object",
+            "properties": {
+                "branch": {"type": "string"},
+                "create": {"type": "boolean", "default": False},
+            },
+            "required": ["branch"],
+        },
+        risk="medium",
+    ),
+    ToolSpec(
         name="project_overview",
         description="Summarize project structure, type, and key config files.",
         parameters={"type": "object", "properties": {}},
@@ -183,8 +236,11 @@ TOOL_SPECS: list[ToolSpec] = [
 ]
 
 
-def openai_tool_schemas() -> list[dict[str, Any]]:
-    return [s.to_openai_schema() for s in TOOL_SPECS]
+def openai_tool_schemas(allowed: set[str] | frozenset[str] | None = None) -> list[dict[str, Any]]:
+    specs = TOOL_SPECS
+    if allowed is not None:
+        specs = [s for s in TOOL_SPECS if s.name in allowed]
+    return [s.to_openai_schema() for s in specs]
 
 
 def tool_names() -> list[str]:
@@ -198,8 +254,11 @@ def get_tool_spec(name: str) -> ToolSpec | None:
     return None
 
 
-def list_tools_for_display() -> list[dict[str, str]]:
+def list_tools_for_display(allowed: set[str] | frozenset[str] | None = None) -> list[dict[str, str]]:
+    specs = TOOL_SPECS
+    if allowed is not None:
+        specs = [s for s in TOOL_SPECS if s.name in allowed]
     return [
         {"name": s.name, "description": s.description, "risk": s.risk}
-        for s in TOOL_SPECS
+        for s in specs
     ]

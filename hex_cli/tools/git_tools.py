@@ -153,3 +153,88 @@ class GitTools:
             return {"ok": True, "remote": remote, "branch": active}
         except Exception as e:
             return {"ok": False, "error": str(e)}
+
+    def git_branches(self) -> dict[str, Any]:
+        """List local branches and current branch."""
+        try:
+            repo = self._get_repo()
+        except RuntimeError as e:
+            return {"ok": False, "error": str(e)}
+        try:
+            current = repo.active_branch.name
+        except TypeError:
+            current = "(detached)"
+        branches = [b.name for b in repo.branches]
+        return {"ok": True, "current": current, "branches": branches}
+
+    def git_log(self, max_count: int = 15) -> dict[str, Any]:
+        """Recent commit history (read-only)."""
+        try:
+            repo = self._get_repo()
+        except RuntimeError as e:
+            return {"ok": False, "error": str(e)}
+        try:
+            commits = []
+            for c in repo.iter_commits(max_count=max_count):
+                commits.append({
+                    "sha": c.hexsha[:10],
+                    "message": (c.message or "").strip().splitlines()[0][:120],
+                    "author": str(c.author),
+                    "date": c.committed_datetime.isoformat() if c.committed_datetime else "",
+                })
+            return {"ok": True, "commits": commits}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def git_stage(self, paths: list[str] | None = None) -> dict[str, Any]:
+        """Stage selected paths (or all) — requires approval."""
+        try:
+            repo = self._get_repo()
+        except RuntimeError as e:
+            return {"ok": False, "error": str(e)}
+
+        detail = "all changes" if not paths else ", ".join(paths[:10])
+        result = self.perms.check(
+            ActionType.GIT_COMMIT,
+            f"Stage files: {detail}",
+            detail=detail,
+        )
+        if not result.allowed:
+            return {"ok": False, "error": result.reason, "skipped": True}
+
+        try:
+            if paths:
+                for p in paths:
+                    repo.git.add(p)
+            else:
+                repo.git.add(A=True)
+            return {"ok": True, "staged": paths or ["(all)"]}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+
+    def git_checkout(self, branch: str, create: bool = False) -> dict[str, Any]:
+        """Switch branch with confirmation. Never force or discard without approval."""
+        try:
+            repo = self._get_repo()
+        except RuntimeError as e:
+            return {"ok": False, "error": str(e)}
+
+        if not branch or not branch.strip():
+            return {"ok": False, "error": "Branch name required"}
+
+        result = self.perms.check(
+            ActionType.GIT_COMMIT,
+            f"{'Create and switch to' if create else 'Switch to'} branch '{branch}'",
+            detail=branch,
+        )
+        if not result.allowed:
+            return {"ok": False, "error": result.reason, "skipped": True}
+
+        try:
+            if create:
+                repo.git.checkout("-b", branch)
+            else:
+                repo.git.checkout(branch)
+            return {"ok": True, "branch": branch, "created": create}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}

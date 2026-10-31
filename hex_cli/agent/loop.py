@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from hex_cli.agent.prompts import build_system_prompt
+from hex_cli.agents.types import AgentKind, AgentProfile, get_agent
 from hex_cli.changes.tracker import ChangeTracker
 from hex_cli.config import AppConfig
 from hex_cli.context import discover_project_summary, load_key_file_snippets
@@ -34,6 +35,7 @@ class AgentLoop:
         config: AppConfig,
         permissions: PermissionManager,
         ui_hooks: dict[str, Callable[..., Any]] | None = None,
+        agent: AgentKind | str | AgentProfile = AgentKind.GENERAL,
     ):
         self.root = project_root.resolve()
         self.provider = provider
@@ -47,9 +49,15 @@ class AgentLoop:
         self.project = ProjectTools(self.root, permissions, config)
         self.changes = ChangeTracker(self.root)
 
+        if isinstance(agent, AgentProfile):
+            self.agent_profile = agent
+        else:
+            self.agent_profile = get_agent(agent)
+
         self.messages: list[ChatMessage] = []
-        self.plan_mode: bool = False
+        self.plan_mode: bool = self.agent_profile.plan_only
         self._cancel = threading.Event()
+        self._delegation_depth = 0
         self._init_system()
 
     def request_cancel(self) -> None:
@@ -67,22 +75,35 @@ class AgentLoop:
             return fn(*args, **kwargs)
         return None
 
+    def set_agent(self, kind: AgentKind | str) -> AgentProfile:
+        """Switch active agent profile and refresh system prompt."""
+        self.agent_profile = get_agent(kind)
+        self.plan_mode = self.agent_profile.plan_only
+        self._init_system()
+        return self.agent_profile
+
     def _init_system(self) -> None:
         summary = discover_project_summary(self.root)
         snippets = load_key_file_snippets(self.root)
-        system = build_system_prompt(summary, snippets)
+        base = build_system_prompt(summary, snippets)
+        agent_block = (
+            f"\n\n## Active agent: {self.agent_profile.display_name}\n\n"
+            + self.agent_profile.system_instructions
+        )
+        system = base + agent_block
         self.messages = [ChatMessage(role="system", content=system)]
 
     def reset_context(self) -> None:
         self._init_system()
         self._ui("print_info", "Conversation context cleared.")
 
-    def run(self, user_task: str, *, plan_only: bool = False) -> str:
+    def run(self, user_task: str, *, plan_only: bool | None = None) -> str:
         """Process a single user task through the agent loop."""
         self.clear_cancel()
-        self.plan_mode = plan_only
+        effective_plan = self.agent_profile.plan_only if plan_only is None else plan_only
+        self.plan_mode = effective_plan
         task = user_task
-        if plan_only:
+        if effective_plan:
             task = (
                 "[PLAN MODE — do not call write_file, edit_file, apply_patch, "
                 "create_directory, or run_command. Only analyze and propose a plan.]\n\n"
@@ -93,7 +114,7 @@ class AgentLoop:
         final_text = ""
         steps = 0
         max_steps = self.config.max_agent_steps
-        tools = openai_tool_schemas()
+        tools = openai_tool_schemas(self.agent_profile.allowed_tools)
 
         while steps < max_steps:
             if self._cancel.is_set():
@@ -142,10 +163,18 @@ class AgentLoop:
                 if self._cancel.is_set():
                     self._ui("print_warning", "Agent cancelled during tool execution.")
                     break
-                # Block mutating tools in plan mode
-                if plan_only and tc.name in {
+                # Enforce agent tool allow-list + plan mode
+                if tc.name not in self.agent_profile.allowed_tools:
+                    result = {
+                        "ok": False,
+                        "skipped": True,
+                        "error": f"Tool '{tc.name}' not permitted for {self.agent_profile.display_name} agent",
+                    }
+                    self._ui("print_tool_status", tc.name, "skipped", "agent policy")
+                elif effective_plan and tc.name in {
                     "write_file", "edit_file", "apply_patch",
                     "create_directory", "run_command", "run_tests",
+                    "git_stage", "git_commit", "git_checkout",
                 }:
                     result = {
                         "ok": False,
@@ -271,6 +300,20 @@ class AgentLoop:
             "git_status": lambda: self.git.git_status(),
             "git_diff": lambda: self.git.git_diff(
                 staged=bool(args.get("staged", False)),
+            ),
+            "git_branches": lambda: self.git.git_branches(),
+            "git_log": lambda: self.git.git_log(
+                max_count=int(args.get("max_count", 15)),
+            ),
+            "git_stage": lambda: self.git.git_stage(
+                paths=args.get("paths"),
+            ),
+            "git_commit": lambda: self.git.git_commit(
+                message=str(args.get("message", "")),
+            ),
+            "git_checkout": lambda: self.git.git_checkout(
+                branch=str(args.get("branch", "")),
+                create=bool(args.get("create", False)),
             ),
             "project_overview": lambda: self.project.project_overview(),
             "detect_project_type": lambda: self.project.detect_project_type(),

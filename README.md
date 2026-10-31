@@ -31,6 +31,16 @@ Inspired by tools such as OpenCode and OpenHands, HEX is an original implementat
   HEX CLI — AI Coding Agent
 ```
 
+## Stage 4 — Professional agent experience (v0.5.0)
+
+- **Persistent sessions** — save/restore conversations under `~/.hex/sessions/` (versioned JSON, no API keys stored)
+- **Specialized agents** — Build, Plan, Explore, General with distinct system prompts and tool allow-lists
+- **Streaming foundation** — native provider streaming with normalized events and honest non-stream fallback
+- **Code review** — accept/reject individual files, external modification detection, unified diffs
+- **Git tools** — branches, log, stage, commit, checkout (all approval-gated; no silent push/reset)
+- **Developer intelligence** — basic syntax diagnostics, ignore-aware project search
+- Commands: `/agent`, `/agents`, `/build`, `/plan`, `/explore`, `/save`, `/history`, `/session rename|delete|search`
+
 ## Features
 
 - **Full-screen TUI** (Stage 1) — OpenCode-inspired terminal UI with header, sidebar, chat panel, and status bar

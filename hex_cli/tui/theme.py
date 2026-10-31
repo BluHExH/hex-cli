@@ -1,196 +1,208 @@
-"""HEX TUI colour theme and CSS."""
+"""HEX TUI colour theme and CSS — professional dark terminal aesthetic."""
 
 from __future__ import annotations
 
-# Textual CSS for the HEX app — dark, professional, OpenCode-inspired spacing.
 HEX_CSS = """
-/* ---- Global ---- */
 Screen {
-    background: #0d1117;
+    background: #0a0e14;
     color: #e6edf3;
 }
 
-/* ---- Header ---- */
 #header {
     dock: top;
     height: 3;
-    background: #161b22;
-    border-bottom: solid #30363d;
+    background: #0d1117;
+    border-bottom: tall #21262d;
     padding: 0 1;
+    layout: horizontal;
 }
 
 #header-brand {
-    width: 14;
+    width: 16;
     color: #c084fc;
     text-style: bold;
+    content-align: left middle;
 }
 
 #header-project {
     width: 1fr;
     color: #8b949e;
+    content-align: left middle;
 }
 
 #header-provider {
     width: auto;
     color: #58a6ff;
-    text-align: right;
+    content-align: right middle;
+    padding-right: 1;
 }
 
 #header-status {
     width: 12;
-    text-align: right;
+    content-align: right middle;
 }
 
 .status-ok { color: #3fb950; }
 .status-busy { color: #d29922; }
 .status-err { color: #f85149; }
 
-/* ---- Sidebar ---- */
 #sidebar {
     dock: left;
-    width: 28;
+    width: 26;
     background: #0d1117;
-    border-right: solid #30363d;
-    padding: 1 0;
+    border-right: tall #21262d;
 }
 
 #sidebar.collapsed {
     width: 0;
     border: none;
-    padding: 0;
+    display: none;
 }
 
-.sidebar-title {
-    color: #8b949e;
+.sidebar-section {
+    color: #6e7681;
     text-style: bold;
-    padding: 0 1;
-    margin-top: 1;
+    padding: 1 1 0 1;
 }
 
 .sidebar-item {
     padding: 0 1;
     height: 1;
-    color: #e6edf3;
+    color: #c9d1d9;
 }
 
 .sidebar-item:hover {
-    background: #21262d;
+    background: #161b22;
+    color: #e6edf3;
 }
 
-.sidebar-item.-selected {
+.sidebar-item.-active {
     background: #21262d;
     color: #c084fc;
+    text-style: bold;
 }
 
-.sidebar-muted {
-    color: #8b949e;
+.sidebar-meta {
     padding: 0 1;
+    color: #8b949e;
+    height: 1;
 }
 
-/* ---- Chat ---- */
 #chat-container {
     width: 1fr;
     height: 1fr;
-    background: #0d1117;
+    background: #0a0e14;
 }
 
 #chat-log {
     height: 1fr;
     padding: 1 2;
-    scrollbar-background: #0d1117;
+    scrollbar-background: #0a0e14;
     scrollbar-color: #30363d;
 }
 
 .message {
-    margin-bottom: 1;
+    margin: 0 0 1 0;
     padding: 0 1;
 }
 
 .message-user {
-    border-left: thick #c084fc;
-    background: #161b22;
+    border-left: thick #58a6ff;
+    background: #0d1117;
+    padding: 1 1;
 }
 
 .message-assistant {
-    border-left: thick #58a6ff;
+    border-left: thick #c084fc;
+    padding: 1 1;
 }
 
 .message-tool {
-    border-left: thick #3fb950;
-    color: #8b949e;
+    border-left: thick #d29922;
+    color: #e3b341;
+    padding: 0 1;
 }
 
 .message-error {
     border-left: thick #f85149;
-    color: #f85149;
+    color: #ffa198;
+    background: #1c0a0a;
+    padding: 1 1;
 }
 
 .message-system {
     color: #8b949e;
-    text-style: italic;
+    padding: 0 1;
 }
 
 .message-status {
-    color: #d29922;
+    color: #6e7681;
+    text-style: italic;
 }
 
-.msg-label {
-    text-style: bold;
+.message-welcome {
     color: #8b949e;
+    padding: 2 2;
+    text-align: center;
 }
 
-/* ---- Input ---- */
-#input-panel {
+#input-wrap {
     dock: bottom;
     height: auto;
-    min-height: 5;
-    max-height: 12;
-    background: #161b22;
-    border-top: solid #30363d;
-    padding: 0 1 1 1;
+    max-height: 14;
+    background: #0d1117;
+    border-top: tall #21262d;
+    padding: 0 1;
 }
 
-#input-hints {
+#input-bar {
     height: 1;
-    color: #8b949e;
+    color: #6e7681;
     padding: 0 1;
 }
 
 #prompt-input {
-    height: auto;
+    height: 4;
     min-height: 3;
     max-height: 8;
-    background: #0d1117;
-    border: solid #30363d;
+    background: #161b22;
+    border: tall #30363d;
     padding: 0 1;
 }
 
 #prompt-input:focus {
-    border: solid #c084fc;
+    border: tall #c084fc;
 }
 
-/* ---- Footer ---- */
+#cmd-suggest {
+    height: auto;
+    max-height: 8;
+    background: #161b22;
+    border: tall #30363d;
+    padding: 0 1;
+    display: none;
+}
+
+#cmd-suggest.visible {
+    display: block;
+}
+
 #footer-bar {
     dock: bottom;
     height: 1;
-    background: #161b22;
-    color: #8b949e;
+    background: #010409;
+    color: #6e7681;
     padding: 0 1;
-}
-
-/* ---- Dialogs ---- */
-DialogScreen {
-    align: center middle;
-    background: rgba(13, 17, 23, 0.72);
+    border-top: solid #21262d;
 }
 
 .dialog {
-    width: 64;
+    width: 72;
     max-width: 90%;
     height: auto;
     max-height: 80%;
     background: #161b22;
-    border: solid #c084fc;
+    border: tall #30363d;
     padding: 1 2;
 }
 
@@ -201,62 +213,31 @@ DialogScreen {
 }
 
 .dialog-body {
+    color: #c9d1d9;
     margin-bottom: 1;
     height: auto;
-    max-height: 20;
+    max-height: 30;
 }
 
 .dialog-list {
-    height: 12;
-    border: solid #30363d;
-}
-
-ListItem {
-    padding: 0 1;
-}
-
-ListItem:hover {
-    background: #21262d;
-}
-
-ListView > ListItem.-highlighted {
-    background: #30363d;
+    height: 16;
+    min-height: 8;
+    border: tall #21262d;
+    background: #0d1117;
+    margin-bottom: 1;
 }
 
 .dialog-buttons {
     height: 3;
     align: right middle;
 }
+"""
 
-/* ---- Welcome ---- */
-#welcome {
-    width: 100%;
-    height: 100%;
-    align: center middle;
-}
-
-.welcome-box {
-    width: 72;
-    max-width: 90%;
-    height: auto;
-    border: solid #30363d;
-    background: #161b22;
-    padding: 2 3;
-}
-
-.welcome-logo {
-    text-align: center;
-    color: #c084fc;
-    text-style: bold;
-}
-
-.welcome-sub {
-    text-align: center;
-    color: #8b949e;
-    margin-bottom: 1;
-}
-
-.welcome-hints {
-    color: #e6edf3;
-}
+HEX_LOGO = """
+██╗  ██╗███████╗██╗  ██╗
+██║  ██║██╔════╝╚██╗██╔╝
+███████║█████╗   ╚███╔╝
+██╔══██║██╔══╝   ██╔██╗
+██║  ██║███████╗██╔╝ ██╗
+╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 """

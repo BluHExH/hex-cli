@@ -12,7 +12,11 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 import httpx
-from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, RateLimitError
+try:
+    from openai import APIConnectionError, APIStatusError, APITimeoutError, OpenAI, RateLimitError
+except ImportError:  # pragma: no cover
+    APIConnectionError = APIStatusError = APITimeoutError = RateLimitError = Exception  # type: ignore
+    OpenAI = None  # type: ignore
 
 from hex_cli.config import ProviderConfig, get_api_key
 
@@ -83,6 +87,8 @@ class BaseProvider:
                 f"API key not found. Use /connect in the TUI, set {config.api_key_env}, "
                 "or add it to ~/.hex/credentials.json. See `hex doctor`."
             )
+        if OpenAI is None:
+            raise ImportError('openai package is required for LLM providers')
         self._client = OpenAI(
             api_key=api_key or "ollama",
             base_url=config.base_url,

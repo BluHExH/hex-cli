@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+# (pydantic_settings optional — not required for AppConfig)
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -72,10 +72,23 @@ class ProviderConfig(BaseModel):
 # Main application config
 # ---------------------------------------------------------------------------
 
+class ProjectConfig(BaseModel):
+    """Optional project-local overrides (.hex/config.json). Cannot silently grant dangerous perms."""
+
+    active_provider: str | None = None
+    selected_model: str | None = None
+    max_agent_steps: int | None = None
+    # Project may only tighten permissions, not loosen to allow without ask
+    permissions: PermissionConfig | None = None
+    default_agent: str | None = None
+    mcp_servers: list[dict] = Field(default_factory=list)
+    lsp: dict[str, list[str]] = Field(default_factory=dict)
+
+
 class AppConfig(BaseModel):
     """Top-level HEX CLI configuration."""
 
-    version: str = "0.3.0"
+    version: str = "0.6.0"
     active_provider: str = "openrouter"
     providers: dict[str, ProviderConfig] = Field(default_factory=dict)
     permissions: PermissionConfig = Field(default_factory=PermissionConfig)
@@ -88,6 +101,8 @@ class AppConfig(BaseModel):
     session_history: bool = True
     # Stage 2: remember last selected model id (provider-scoped via active_provider)
     selected_model: str | None = None
+    default_agent: str = "general"
+    max_subagents: int = 3
 
     def model_post_init(self, __context: Any) -> None:
         from hex_cli.providers.registry import ensure_default_providers
@@ -177,3 +192,40 @@ class EnvInfo(BaseModel):
     api_key_set: bool
     git_available: bool
     ollama_reachable: bool | None = None
+
+
+def load_project_config(project_root: Path) -> ProjectConfig | None:
+    """Load .hex/config.json if present. Returns None when missing/invalid."""
+    path = Path(project_root) / ".hex" / "config.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return ProjectConfig.model_validate(data)
+    except Exception:
+        return None
+
+
+def merge_project_config(app: AppConfig, project: ProjectConfig | None) -> AppConfig:
+    """Apply project overrides. Project cannot force 'allow' over global 'ask'/'deny'."""
+    if project is None:
+        return app
+    data = app.model_dump()
+    if project.active_provider:
+        data["active_provider"] = project.active_provider
+    if project.selected_model:
+        data["selected_model"] = project.selected_model
+    if project.max_agent_steps is not None:
+        data["max_agent_steps"] = project.max_agent_steps
+    if project.default_agent:
+        data["default_agent"] = project.default_agent
+    if project.permissions is not None:
+        # Only allow tightening: allow->ask/deny, ask->deny
+        rank = {"allow": 0, "ask": 1, "deny": 2}
+        merged = dict(data["permissions"])
+        for key, val in project.permissions.model_dump().items():
+            cur = merged.get(key, "ask")
+            if rank.get(val, 1) >= rank.get(cur, 1):
+                merged[key] = val
+        data["permissions"] = merged
+    return AppConfig.model_validate(data)

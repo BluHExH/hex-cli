@@ -31,6 +31,18 @@ Inspired by tools such as OpenCode and OpenHands, HEX is an original implementat
   HEX CLI — AI Coding Agent
 ```
 
+## Stage 5 — Multi-agent, MCP, Skills & Developer Ecosystem (v0.6.0)
+
+- **Parallel subagents** — isolated contexts, concurrency limits, structured merge, cancellation
+- **MCP client** — stdio transport, tool discovery, namespaced tools, approval-gated execution
+- **Skills** — global + project skills (`SKILL.md`), agent-scoped activation
+- **Custom commands** — markdown prompt templates with `{{args}}` substitution
+- **LSP client** — initialize/shutdown, diagnostics, hover, definition, references, symbols
+- **Git worktrees** — list/create/remove with permission checks
+- **Tool cards** — expandable execution states (running/completed/failed/denied/cancelled)
+- **Project config** — `.hex/config.json` overrides that cannot silently loosen permissions
+- Commands: `/mcp`, `/skills`, `/worktree`, `/lsp`, plus user-defined slash commands
+
 ## Stage 4 — Professional agent experience (v0.5.0)
 
 - **Persistent sessions** — save/restore conversations under `~/.hex/sessions/` (versioned JSON, no API keys stored)

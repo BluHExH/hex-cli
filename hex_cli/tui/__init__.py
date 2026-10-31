@@ -1,5 +1,7 @@
-"""HEX CLI full-screen TUI (Textual)."""
+"""HEX Textual TUI package."""
 
-from hex_cli.tui.app import run_tui
+def run_tui(*args, **kwargs):
+    from hex_cli.tui.app import run_tui as _run
+    return _run(*args, **kwargs)
 
 __all__ = ["run_tui"]

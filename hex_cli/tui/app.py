@@ -455,6 +455,107 @@ class HexApp(Stage2Mixin, App[None]):
                 lines = [f"• {h.name} [{h.agent}] id={h.id[:8]} msgs={h.message_count}" for h in hits[:20]]
                 self._post_system("Saved sessions:\n" + "\n".join(lines))
             return
+
+        if lower in ("/mcp", "/mcp list"):
+            from hex_cli.mcp.client import MCPClient
+            client = getattr(self, "_mcp", None)
+            if client is None:
+                self._mcp = MCPClient()
+                client = self._mcp
+            servers = client.list_servers()
+            if not servers:
+                self._post_status("No MCP servers connected. Use /mcp connect <name> -- <command...>")
+            else:
+                lines = [f"• {s['name']} connected={s['connected']} tools={s['tools']}" for s in servers]
+                self._post_system("MCP servers:\n" + "\n".join(lines))
+            return
+        if lower in ("/mcp tools",):
+            client = getattr(self, "_mcp", None) or MCPClient()
+            tools = client.list_tools()
+            if not tools:
+                self._post_status("No MCP tools available.")
+            else:
+                lines = [f"• {t.namespaced_name} — {t.description[:60]}" for t in tools]
+                self._post_system("MCP tools:\n" + "\n".join(lines))
+            return
+        if lower.startswith("/mcp connect "):
+            # /mcp connect name -- cmd arg1 arg2
+            rest = text[len("/mcp connect "):].strip()
+            if " -- " not in rest:
+                self._post_status("Usage: /mcp connect <name> -- <command> [args...]")
+                return
+            name, _, cmd_s = rest.partition(" -- ")
+            import shlex
+            from hex_cli.mcp.client import MCPClient, MCPServerConfig
+            if not hasattr(self, "_mcp") or self._mcp is None:
+                self._mcp = MCPClient()
+            cfg = MCPServerConfig(name=name.strip(), command=shlex.split(cmd_s.strip()))
+            result = self._mcp.connect(cfg)
+            if result.get("ok"):
+                self._post_system(f"MCP connected: {name} ({result.get('tools')} tools)")
+            else:
+                self._post_error(result.get("error", "connect failed"))
+            return
+        if lower.startswith("/mcp disconnect "):
+            name = text.split(maxsplit=2)[-1]
+            client = getattr(self, "_mcp", None)
+            if client and client.disconnect(name):
+                self._post_system(f"Disconnected MCP server: {name}")
+            else:
+                self._post_status(f"Server not connected: {name}")
+            return
+        if lower in ("/skills", "/skills list"):
+            from hex_cli.skills.loader import SkillLoader
+            loader = SkillLoader(self.project_root)
+            loader.reload()
+            skills = loader.list_skills()
+            if not skills:
+                self._post_status("No skills found in ~/.hex/skills or .hex/skills")
+            else:
+                lines = [f"• {s.name} [{s.source}] — {s.description[:60]}" for s in skills]
+                self._post_system("Skills:\n" + "\n".join(lines))
+            return
+        if lower.startswith("/skills show "):
+            name = text.split(maxsplit=2)[-1]
+            from hex_cli.skills.loader import SkillLoader
+            loader = SkillLoader(self.project_root)
+            loader.reload()
+            s = loader.get(name)
+            if not s:
+                self._post_status(f"Skill not found: {name}")
+            else:
+                self._post_system(f"# {s.name}\n{s.description}\n\n{s.instructions[:3000]}")
+            return
+        if lower in ("/skills reload",):
+            from hex_cli.skills.loader import SkillLoader
+            n = SkillLoader(self.project_root).reload()
+            self._post_system(f"Reloaded {n} skill(s)")
+            return
+        if lower in ("/worktree", "/worktree list"):
+            from hex_cli.worktree.manager import WorktreeManager
+            from hex_cli.permissions import PermissionManager
+            wt = WorktreeManager(self.project_root, PermissionManager(self.config, self.project_root))
+            result = wt.list_worktrees()
+            if not result.get("ok"):
+                self._post_error(result.get("error", "worktree list failed"))
+            else:
+                lines = [f"• {t.get('path')} [{t.get('branch', t.get('head', '?'))}]" for t in result.get("worktrees", [])]
+                self._post_system("Worktrees:\n" + ("\n".join(lines) if lines else "(none)"))
+            return
+        if lower in ("/lsp",):
+            from hex_cli.lsp.client import LSPClient
+            client = getattr(self, "_lsp", None)
+            if client is None:
+                self._lsp = LSPClient(self.project_root)
+                client = self._lsp
+            available = client.available_defaults()
+            sessions = client.list_sessions()
+            lines = [f"Available: {', '.join(available) or '(none found on PATH)'}"]
+            if sessions:
+                lines += [f"Session: {s['language']} init={s['initialized']}" for s in sessions]
+            self._post_system("LSP:\n" + "\n".join(lines))
+            return
+
         if lower in ("/diff", "/review"):
             if self._agent and self._agent.changes.records:
                 self._post_system(self._agent.changes.all_diffs()[:8000])
@@ -513,6 +614,28 @@ class HexApp(Stage2Mixin, App[None]):
                 "Not connected. Run /connect to add a provider, then try again."
             )
             return
+
+        # Custom slash commands
+        if text.startswith("/"):
+            from hex_cli.commands_ext.loader import CommandLoader
+            loader = CommandLoader(self.project_root)
+            loader.reload()
+            parts = text[1:].split(maxsplit=1)
+            cmd_name = parts[0].lower()
+            cmd_args = parts[1] if len(parts) > 1 else ""
+            custom = loader.get(cmd_name)
+            if custom:
+                rendered = custom.render(cmd_args)
+                if custom.agent and self._agent:
+                    try:
+                        self._agent.set_agent(custom.agent)
+                        self.state.agent = custom.agent
+                    except Exception:
+                        pass
+                self._post_user(f"/{cmd_name} {cmd_args}".strip())
+                self._post_system(f"Custom command /{cmd_name} → agent")
+                self.run_agent_task(rendered)
+                return
 
         self._post_user(text)
         self.run_agent_task(text)

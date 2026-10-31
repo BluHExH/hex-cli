@@ -30,11 +30,13 @@ class AgentLoop:
         provider: BaseProvider,
         config: AppConfig,
         permissions: PermissionManager,
+        ui_hooks: dict[str, Callable[..., Any]] | None = None,
     ):
         self.root = project_root.resolve()
         self.provider = provider
         self.config = config
         self.permissions = permissions
+        self._hooks = ui_hooks or {}
 
         self.fs = FileSystemTools(self.root, permissions, config)
         self.cmd = CommandTools(self.root, permissions, config)
@@ -42,6 +44,15 @@ class AgentLoop:
 
         self.messages: list[ChatMessage] = []
         self._init_system()
+
+    def _ui(self, name: str, *args: Any, **kwargs: Any) -> Any:
+        hook = self._hooks.get(name)
+        if hook is not None:
+            return hook(*args, **kwargs)
+        fn = getattr(ui, name, None)
+        if callable(fn):
+            return fn(*args, **kwargs)
+        return None
 
     def _init_system(self) -> None:
         summary = discover_project_summary(self.root)
@@ -51,7 +62,7 @@ class AgentLoop:
 
     def reset_context(self) -> None:
         self._init_system()
-        ui.print_info("Conversation context cleared.")
+        self._ui("print_info", "Conversation context cleared.")
 
     def run(self, user_task: str) -> str:
         """Process a single user task through the agent loop."""
@@ -63,16 +74,21 @@ class AgentLoop:
 
         while steps < max_steps:
             steps += 1
-            with ui.spinner(f"Thinking (step {steps}/{max_steps})…") as progress:
-                progress.add_task("think")
-                try:
+            spinner_ctx = self._ui("spinner", f"Thinking (step {steps}/{max_steps})…")
+            try:
+                if spinner_ctx is not None:
+                    with spinner_ctx as progress:
+                        if hasattr(progress, "add_task"):
+                            progress.add_task("think")
+                        response = self.provider.chat(self.messages, tools=TOOL_SCHEMAS)
+                else:
                     response = self.provider.chat(self.messages, tools=TOOL_SCHEMAS)
-                except ProviderError as e:
-                    ui.print_error(str(e))
-                    return str(e)
-                except Exception as e:
-                    ui.print_error(f"Unexpected error: {e}")
-                    return str(e)
+            except ProviderError as e:
+                self._ui("print_error", str(e))
+                return str(e)
+            except Exception as e:
+                self._ui("print_error", f"Unexpected error: {e}")
+                return str(e)
 
             assistant_msg = ChatMessage(
                 role="assistant",
@@ -93,7 +109,7 @@ class AgentLoop:
             self.messages.append(assistant_msg)
 
             if response.content:
-                ui.print_assistant(response.content)
+                self._ui("print_assistant", response.content)
                 final_text = response.content
 
             if not response.tool_calls:
@@ -105,7 +121,7 @@ class AgentLoop:
                 if len(result_str) > 20_000:
                     result_str = result_str[:20_000] + "…(truncated)"
 
-                self.messages.append(
+                self.messages conv.append(
                     ChatMessage(
                         role="tool",
                         tool_call_id=tc.id,
@@ -115,9 +131,10 @@ class AgentLoop:
                 )
 
         if steps >= max_steps:
-            ui.print_warning(
+            self._ui(
+                "print_warning",
                 f"Reached maximum agent steps ({max_steps}). "
-                "Increase max_agent_steps in config if needed."
+                "Increase max_agent_steps in config if needed.",
             )
 
         return final_text
@@ -127,10 +144,10 @@ class AgentLoop:
         args = tc.arguments if isinstance(tc.arguments, dict) else {}
 
         if "_raw" in args and len(args) == 1:
-            ui.print_tool_status(name, "error", "invalid JSON arguments")
+            self._ui("print_tool_status", name, "error", "invalid JSON arguments")
             return {"ok": False, "error": "Tool arguments were not valid JSON"}
 
-        ui.print_tool_status(name, "running", self._short_args(name, args))
+        self._ui("print_tool_status", name, "running", self._short_args(name, args))
 
         handlers: dict[str, Callable[..., dict[str, Any]]] = {
             "list_files": lambda: self.fs.list_files(
@@ -175,36 +192,36 @@ class AgentLoop:
 
         handler = handlers.get(name)
         if handler is None:
-            ui.print_tool_status(name, "error", "unknown tool")
+            self._ui("print_tool_status", name, "error", "unknown tool")
             return {"ok": False, "error": f"Unknown tool: {name}"}
 
         if name in ("read_file", "write_file", "edit_file", "create_directory"):
             if not args.get("path"):
-                ui.print_tool_status(name, "error", "missing path")
+                self._ui("print_tool_status", name, "error", "missing path")
                 return {"ok": False, "error": "path is required"}
         if name == "search_text" and not args.get("pattern"):
-            ui.print_tool_status(name, "error", "missing pattern")
+            self._ui("print_tool_status", name, "error", "missing pattern")
             return {"ok": False, "error": "pattern is required"}
         if name == "run_command" and not args.get("command"):
-            ui.print_tool_status(name, "error", "missing command")
+            self._ui("print_tool_status", name, "error", "missing command")
             return {"ok": False, "error": "command is required"}
         if name == "write_file" and "content" not in args:
-            ui.print_tool_status(name, "error", "missing content")
+            self._ui("print_tool_status", name, "error", "missing content")
             return {"ok": False, "error": "content is required"}
         if name == "edit_file" and (
             "old_string" not in args or "new_string" not in args
         ):
-            ui.print_tool_status(name, "error", "missing old_string/new_string")
+            self._ui("print_tool_status", name, "error", "missing old_string/new_string")
             return {"ok": False, "error": "old_string and new_string are required"}
 
         try:
             result = handler()
         except Exception as e:
-            ui.print_tool_status(name, "error", str(e)[:80])
+            self._ui("print_tool_status", name, "error", str(e)[:80])
             return {"ok": False, "error": str(e)}
 
         if result.get("skipped"):
-            ui.print_tool_status(name, "skipped", result.get("error", "rejected"))
+            self._ui("print_tool_status", name, "skipped", result.get("error", "rejected"))
         elif result.get("ok"):
             detail = ""
             if "path" in result:
@@ -213,9 +230,9 @@ class AgentLoop:
                 detail = f"exit {result['exit_code']}"
             elif "count" in result:
                 detail = f"{result['count']} items"
-            ui.print_tool_status(name, "ok", detail)
+            self._ui("print_tool_status", name, "ok", detail)
         else:
-            ui.print_tool_status(name, "error", str(result.get("error", ""))[:80])
+            self._ui("print_tool_status", name, "error", str(result.get("error", ""))[:80])
 
         return result
 

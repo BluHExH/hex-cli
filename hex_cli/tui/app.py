@@ -22,7 +22,7 @@ from hex_cli.config import (
     save_config,
 )
 from hex_cli.permissions import PermissionManager, PermissionRequest
-from hex_cli..providers.base import create_provider
+from hex_cli.providers.base import create_provider
 from hex_cli.providers.catalog import OPENROUTER_FREE_FALLBACK
 from hex_cli.tui.stage2_mixin import Stage2Mixin
 from hex_cli.tui.state import SessionState
@@ -95,7 +95,6 @@ class HexApp(Stage2Mixin, App[None]):
         self.call_later(self._boot_provider)
 
     def _boot_provider(self) -> None:
-        """Start TUI even without an API key."""
         try:
             pcfg = self.config.get_active_provider()
             if getattr(self.config, "selected_model", None):
@@ -422,7 +421,6 @@ class HexApp(Stage2Mixin, App[None]):
 
 
 def run_tui(project_root: Path | None = None, model: str | None = None) -> None:
-    """Entry point used by the Typer CLI."""
     root = (project_root or Path.cwd()).resolve()
     load_dotenv_if_present(root)
     config = load_config()

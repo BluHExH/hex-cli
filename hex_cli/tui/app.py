@@ -30,27 +30,13 @@ from hex_cli.tui.widgets.dialogs import HelpDialog, PermissionDialog, SelectDial
 from hex_cli.tui.widgets.header import HeaderBar
 from hex_cli.tui.widgets.input_panel import InputPanel, PromptSubmitted
 from hex_cli.tui.widgets.sidebar import Sidebar
+from hex_cli.tui.stage2_mixin import Stage2Mixin
+from hex_cli.providers.catalog import OPENROUTER_FREE_FALLBACK
 
-# Popular free OpenRouter model presets (Stage 1 catalog)
-FREE_MODEL_PRESETS = [
-    "nvidia/nemotron-3-ultra-550b-a55b:free",
-    "nvidia/nemotron-3.5-lightning:free",
-    "nvidia/nemotron-3.5-super-vl:free",
-    "poolside/laguna-s-2.1:free",
-    "poolside/laguna-xs-2.1:free",
-    "cohere/north-mini-code:free",
-    "recursive/flint-v1.0:free",
-    "thinkingmachines/inkling:free",
-    "thinkingmachines/inkling-small:free",
-    "dots-studio/dots-3-note-preview:free",
-    "xingchen-agi/xing4.0-29b-a4b:free",
-    "openrouter/free",
-    "google/gemma-4-31b-it:free",
-    "google/gemma-4-26b-a4b-it:free",
-]
+FREE_MODEL_PRESETS = list(OPENROUTER_FREE_FALLBACK)
 
 
-class HexApp(App[None]):
+class HexApp(Stage2Mixin, App[None]):
     """OpenCode-inspired full-screen coding agent UI."""
 
     CSS = HEX_CSS
@@ -76,7 +62,7 @@ class HexApp(App[None]):
         self.project_root = project_root.resolve()
         self.config = config
         provider_cfg = config.get_active_provider()
-        model = model_override or provider_cfg.default_model
+        model = model_override or getattr(config, "selected_model", None) or provider_cfg.default_model
         self.state = SessionState(
             project_root=self.project_root,
             provider_name=provider_cfg.name,
@@ -104,27 +90,33 @@ class HexApp(App[None]):
         self.call_later(self._boot_provider)
 
     def _boot_provider(self) -> None:
+        """Start TUI even without an API key."""
         try:
             pcfg = self.config.get_active_provider()
-            self._provider = create_provider(pcfg, model=self.state.model)
+            if getattr(self.config, "selected_model", None):
+                self.state.model = self.config.selected_model
             key = get_api_key(pcfg)
-            self.state.connected = bool(key) or pcfg.name == "ollama"
-            self._setup_agent()
-            self.state.status_message = "Ready"
-            if not self.state.connected and pcfg.name != "ollama":
-                self._post_system(
-                    f"No API key for {pcfg.name}. Set {pcfg.api_key_env} then restart, "
-                    "or switch provider with Ctrl+P."
-                )
-            else:
+            self.state.connected = bool(key) or pcfg.name in ("ollama", "custom")
+            self._provider = create_provider(
+                pcfg, model=self.state.model, require_key=False
+            )
+            if self.state.connected:
+                self._setup_agent()
+                self.state.status_message = "Ready"
                 self._post_system(
                     f"Connected \u00b7 {pcfg.name} \u00b7 {self.state.model}. "
-                    "Describe a coding task to begin."
+                    "Describe a coding task, or type /models to switch models."
                 )
+            else:
+                self._agent = None
+                self.state.status_message = "Not connected"
+                self._show_onboarding()
         except Exception as e:
             self.state.connected = False
+            self._agent = None
             self.state.status_message = "Provider error"
             self._post_error(str(e))
+            self._show_onboarding()
         self._refresh_chrome()
 
     def _setup_agent(self) -> None:
@@ -141,16 +133,12 @@ class HexApp(App[None]):
 
     def _ui_hooks(self) -> dict[str, Any]:
         return {
-            "print_assistant": lambda text: self.call_from_thread(
-                self._post_assistant, text
-            ),
+            "print_assistant": lambda text: self.call_from_thread(self._post_assistant, text),
             "print_tool_status": lambda name, status, detail="": self.call_from_thread(
                 self._post_tool, name, status, detail
             ),
             "print_error": lambda msg: self.call_from_thread(self._post_error, msg),
-            "print_warning": lambda msg: self.call_from_thread(
-                self._post_status, msg
-            ),
+            "print_warning": lambda msg: self.call_from_thread(self._post_status, msg),
             "print_info": lambda msg: self.call_from_thread(self._post_system, msg),
             "spinner": None,
         }
@@ -213,7 +201,6 @@ class HexApp(App[None]):
             header.model = self.state.model
             header.connected = self.state.connected
             header.status = self.state.status_message
-
             side = self.query_one(Sidebar)
             side.provider = self.state.provider_name
             side.model = self.state.model
@@ -243,7 +230,7 @@ class HexApp(App[None]):
             self._post_status("Still working \u2014 wait for the current task to finish.")
             return
 
-        lower = text.lower()
+        lower = text.lower().strip()
         if lower in ("/exit", "/quit", "exit", "quit"):
             self.exit()
             return
@@ -261,19 +248,35 @@ class HexApp(App[None]):
                 f"Connected: {self.state.connected}"
             )
             return
-        if lower.startswith("/model"):
-            parts = text.split(maxsplit=1)
-            if len(parts) == 2:
-                self._set_model(parts[1].strip())
-            else:
-                self.action_pick_model()
+        if lower in ("/connect", "/connect provider"):
+            self.action_connect_provider()
             return
-        if lower.startswith("/provider"):
-            parts = text.split(maxsplit=1)
-            if len(parts) == 2:
-                self._set_provider(parts[1].strip())
-            else:
-                self.action_pick_provider()
+        if lower in ("/models", "/model"):
+            self.action_pick_model()
+            return
+        if lower.startswith("/model "):
+            self._set_model(text.split(maxsplit=1)[1].strip())
+            return
+        if lower in ("/providers", "/provider"):
+            self.action_show_providers()
+            return
+        if lower.startswith("/provider "):
+            self._set_provider(text.split(maxsplit=1)[1].strip())
+            return
+        if lower in ("/disconnect",):
+            self.action_disconnect_provider()
+            return
+        if lower.startswith("/disconnect "):
+            self._disconnect_named(text.split(maxsplit=1)[1].strip())
+            return
+        if lower in ("/settings",):
+            self.action_show_settings()
+            return
+
+        if not self.state.connected or self._agent is None:
+            self._post_status(
+                "Not connected. Run /connect to add a provider, then try again."
+            )
             return
 
         self._post_user(text)
@@ -326,21 +329,6 @@ class HexApp(App[None]):
     def action_focus_input(self) -> None:
         self.query_one(InputPanel).focus_input()
 
-    def action_pick_model(self) -> None:
-        options = list(FREE_MODEL_PRESETS)
-        current = self.state.model
-        if current not in options:
-            options = [current] + options
-
-        def _done(choice: str | None) -> None:
-            if choice:
-                self._set_model(choice)
-
-        self.push_screen(
-            SelectDialog("Select model", options, current=current),
-            _done,
-        )
-
     def action_pick_provider(self) -> None:
         options = list(self.config.providers.keys())
 
@@ -356,42 +344,6 @@ class HexApp(App[None]):
             ),
             _done,
         )
-
-    def _set_model(self, model: str) -> None:
-        try:
-            pcfg = self.config.get_active_provider()
-            self._provider = create_provider(pcfg, model=model)
-            self.state.model = model
-            pcfg.default_model = model
-            save_config(self.config)
-            if self._agent:
-                self._agent.provider = self._provider
-            self._post_system(f"Model set to {model}")
-            self.state.connected = True
-        except Exception as e:
-            self._post_error(str(e))
-        self._refresh_chrome()
-
-    def _set_provider(self, name: str) -> None:
-        if name not in self.config.providers:
-            self._post_error(f"Unknown provider: {name}")
-            return
-        try:
-            self.config.active_provider = name
-            save_config(self.config)
-            pcfg = self.config.get_active_provider()
-            model = pcfg.default_model
-            self._provider = create_provider(pcfg, model=model)
-            self.state.provider_name = name
-            self.state.model = model
-            key = get_api_key(pcfg)
-            self.state.connected = bool(key) or name == "ollama"
-            self._setup_agent()
-            self._post_system(f"Provider set to {name} (model {model})")
-        except Exception as e:
-            self._post_error(str(e))
-            self.state.connected = False
-        self._refresh_chrome()
 
 
 def run_tui(project_root: Path | None = None, model: str | None = None) -> None:

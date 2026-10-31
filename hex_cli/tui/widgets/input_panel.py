@@ -1,18 +1,18 @@
-"""HEX multiline prompt composer.
+"""HEX multiline prompt composer with reliable Enter-to-send.
 
-Enter        → send
-Shift+Enter  → newline (also Ctrl+J)
-Tab          → accept slash suggestion
-Esc          → hide suggestions
+Root cause of Enter-not-sending: TextArea consumes Enter for newlines before
+parent on_key handlers. Fix: subclass TextArea with priority BINDINGS so
+Enter submits and Shift+Enter / Ctrl+J inserts a newline.
 """
 
 from __future__ import annotations
 
 from textual import events, on
 from textual.app import ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal, Vertical
 from textual.message import Message
-from textual.widgets import Static, TextArea
+from textual.widgets import Button, Static, TextArea
 
 SLASH_COMMANDS: list[tuple[str, str]] = [
     ("/help", "Show help and shortcuts"),
@@ -20,43 +20,64 @@ SLASH_COMMANDS: list[tuple[str, str]] = [
     ("/models", "Browse and select models"),
     ("/providers", "List connected providers"),
     ("/agent", "Show or switch specialized agents"),
-    ("/agents", "List agents (build, plan, explore, general)"),
-    ("/plan", "Switch to Plan agent / plan a task"),
-    ("/build", "Switch to Build agent / implement a task"),
-    ("/explore", "Switch to Explore agent / investigate code"),
+    ("/agents", "List agents"),
+    ("/plan", "Plan agent / plan a task"),
+    ("/build", "Build agent / implement a task"),
+    ("/explore", "Explore agent / investigate code"),
     ("/diff", "Show agent code changes"),
-    ("/undo", "Restore the last agent file change"),
-    ("/redo", "Re-apply last undone change"),
-    ("/tools", "List available agent tools"),
-    ("/permissions", "Show permission modes"),
-    ("/init", "Analyze project and summarize structure"),
-    ("/new", "Start a new session"),
-    ("/clear", "Clear current conversation"),
-    ("/sessions", "List in-memory sessions"),
-    ("/save", "Persist current session to disk"),
-    ("/history", "List saved sessions for this project"),
-    ("/mcp", "MCP servers and tools"),
-    ("/skills", "List available skills"),
-    ("/worktree", "Git worktree management"),
-    ("/lsp", "Language server status"),
-    ("/files", "Fuzzy file picker"),
-    ("/editor", "Compose in external editor"),
-    ("/theme", "Switch UI theme"),
-    ("/export", "Export conversation to Markdown"),
-    ("/compact", "Compact session context"),
-    ("/status", "Show connection status"),
-    ("/exit", "Quit HEX"),
+    ("/undo", "Undo last agent file change"),
+    ("/redo", "Redo last undone change"),
+    ("/tools", "List agent tools"),
+    ("/permissions", "Permission modes"),
+    ("/init", "Analyze project"),
+    ("/new", "New session"),
+    ("/clear", "Clear conversation"),
+    ("/sessions", "List sessions"),
+    ("/save", "Save session"),
+    ("/history", "Saved sessions"),
+    ("/mcp", "MCP servers"),
+    ("/skills", "Skills"),
+    ("/files", "File picker"),
+    ("/editor", "External editor"),
+    ("/theme", "UI theme"),
+    ("/export", "Export chat"),
+    ("/compact", "Compact context"),
+    ("/status", "Status"),
+    ("/exit", "Quit"),
 ]
 
 
 class PromptSubmitted(Message):
+    """User submitted a non-empty prompt."""
+
     def __init__(self, text: str) -> None:
         super().__init__()
         self.text = text
 
 
+class PromptTextArea(TextArea):
+    """TextArea where Enter submits; Shift+Enter / Ctrl+J inserts newline."""
+
+    BINDINGS = [
+        Binding("enter", "submit_prompt", "Send", priority=True, show=False),
+        Binding("shift+enter", "insert_newline", "Newline", priority=True, show=False),
+        Binding("ctrl+j", "insert_newline", "Newline", priority=True, show=False),
+    ]
+
+    def action_submit_prompt(self) -> None:
+        text = self.text.strip()
+        if not text:
+            return
+        self.clear()
+        # Bubble submission to InputPanel
+        self.post_message(PromptSubmitted(text))
+
+    def action_insert_newline(self) -> None:
+        self.insert("\n")
+
+
 class InputPanel(Static):
-    """Large multiline composer always visible at the bottom."""
+    """Composer: multiline area + send button + slash suggestions."""
 
     def __init__(self, **kwargs) -> None:
         super().__init__(id="composer", **kwargs)
@@ -69,27 +90,26 @@ class InputPanel(Static):
             with Horizontal(id="composer-meta"):
                 yield Static("agent: general", id="composer-agent")
                 yield Static("model: —", id="composer-model")
-                yield Static(
-                    "Enter send · Shift+Enter newline · / commands · Ctrl+. stop",
-                    id="composer-hint",
-                )
+                yield Static("Enter send · Shift+Enter newline", id="composer-hint")
             yield Static("", id="cmd-suggest")
-            yield TextArea("", id="prompt-input", show_line_numbers=False)
+            with Horizontal(id="composer-row"):
+                yield PromptTextArea(id="prompt-input")
+                yield Button("Send", id="btn-send", classes="-primary")
             yield Static(
-                "  Type a coding task…  ·  Ctrl+N new  ·  Ctrl+B sidebar  ·  Ctrl+P palette  ·  Ctrl+F files",
+                "  Ctrl+P palette · Ctrl+F files · Ctrl+N new · Ctrl+B sidebar",
                 id="composer-footer",
             )
 
     def on_mount(self) -> None:
         try:
-            ta = self.query_one("#prompt-input", TextArea)
+            ta = self.query_one("#prompt-input", PromptTextArea)
             ta.show_line_numbers = False
         except Exception:
             pass
 
     def focus_input(self) -> None:
         try:
-            self.query_one("#prompt-input", TextArea).focus()
+            self.query_one("#prompt-input", PromptTextArea).focus()
         except Exception:
             pass
 
@@ -107,24 +127,43 @@ class InputPanel(Static):
         self._busy = busy
         try:
             hint = self.query_one("#composer-hint", Static)
+            btn = self.query_one("#btn-send", Button)
             if busy:
-                hint.update("Agent running…  Ctrl+. to stop  ·  Enter queues after finish")
+                hint.update("Working…  Ctrl+. stop")
+                btn.label = "…"
+                btn.disabled = True
             else:
-                hint.update("Enter send · Shift+Enter newline · / commands · Ctrl+. stop")
+                hint.update("Enter send · Shift+Enter newline")
+                btn.label = "Send"
+                btn.disabled = False
         except Exception:
             pass
 
     def clear_input(self) -> None:
         try:
-            self.query_one("#prompt-input", TextArea).clear()
+            self.query_one("#prompt-input", PromptTextArea).clear()
         except Exception:
             pass
 
     def get_text(self) -> str:
         try:
-            return self.query_one("#prompt-input", TextArea).text
+            return self.query_one("#prompt-input", PromptTextArea).text
         except Exception:
             return ""
+
+    def _submit_current(self) -> None:
+        ta = self.query_one("#prompt-input", PromptTextArea)
+        text = ta.text.strip()
+        if not text:
+            return
+        ta.clear()
+        self._show_suggestions("")
+        self.post_message(PromptSubmitted(text))
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "btn-send":
+            event.stop()
+            self._submit_current()
 
     def _show_suggestions(self, prefix: str) -> None:
         box = self.query_one("#cmd-suggest", Static)
@@ -153,7 +192,7 @@ class InputPanel(Static):
         if not self._filtered:
             return
         cmd, _ = self._filtered[self._suggest_index]
-        ta = self.query_one("#prompt-input", TextArea)
+        ta = self.query_one("#prompt-input", PromptTextArea)
         ta.clear()
         ta.insert(cmd + " ")
         self._show_suggestions("")
@@ -170,22 +209,16 @@ class InputPanel(Static):
 
     def on_key(self, event: events.Key) -> None:
         try:
-            ta = self.query_one("#prompt-input", TextArea)
+            ta = self.query_one("#prompt-input", PromptTextArea)
         except Exception:
             return
         if not ta.has_focus:
             return
-
-        # Shift+Enter / Ctrl+J → allow default newline in TextArea
-        if event.key in ("shift+enter", "ctrl+j"):
-            return
-
         if event.key == "tab" and self._filtered:
             event.prevent_default()
             event.stop()
             self._accept_suggestion()
             return
-
         if event.key in ("up", "down") and self._filtered:
             event.prevent_default()
             event.stop()
@@ -199,20 +232,6 @@ class InputPanel(Static):
                 lines.append(f"{mark} {cmd}  [dim]{desc}[/]")
             self.query_one("#cmd-suggest", Static).update("\n".join(lines))
             return
-
-        if event.key == "enter":
-            text = ta.text.strip()
-            if not text:
-                event.prevent_default()
-                event.stop()
-                return
-            event.prevent_default()
-            event.stop()
-            ta.clear()
-            self._show_suggestions("")
-            self.post_message(PromptSubmitted(text))
-            return
-
         if event.key == "escape" and self._filtered:
             event.prevent_default()
             event.stop()

@@ -21,6 +21,15 @@ class NewSessionRequested(Message):
     pass
 
 
+class AgentClicked(Message):
+    pass
+
+
+class ModelClicked(Message):
+    pass
+
+
+
 class Sidebar(Vertical):
     """Persistent left rail."""
 
@@ -121,8 +130,14 @@ class Sidebar(Vertical):
     def on_click(self, event) -> None:  # noqa: ANN001
         try:
             wid = getattr(event.widget, "id", None) or ""
-            if isinstance(wid, str) and wid.startswith("sess-"):
+            if not isinstance(wid, str):
+                return
+            if wid.startswith("sess-"):
                 self.post_message(SessionSelected(wid[5:]))
+            elif wid == "sidebar-agent":
+                self.post_message(AgentClicked())
+            elif wid == "sidebar-model":
+                self.post_message(ModelClicked())
         except Exception:
             pass
 

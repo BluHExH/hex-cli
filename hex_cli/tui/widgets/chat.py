@@ -38,11 +38,8 @@ class ChatLog(VerticalScroll):
     @staticmethod
     def _welcome_markup() -> str:
         return (
-            "[bold #a78bfa]HEX[/]  ·  AI coding agent\n\n"
-            "[dim]Describe a coding task below, or type [bold]/[/] for commands.\n\n"
-            "  [bold]Ctrl+N[/]  new session     [bold]Ctrl+B[/]  sidebar\n"
-            "  [bold]Ctrl+P[/]  models          [bold]Ctrl+H[/]  help\n"
-            "  [bold]Enter[/]   send            [bold]Shift+Enter[/]  newline[/]"
+            "[bold #a78bfa]HEX[/]\n"
+            "[dim]Ask anything about this project[/]"
         )
 
     def append_entry(self, entry: ChatEntry) -> None:

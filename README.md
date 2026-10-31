@@ -1,3 +1,11 @@
+## HEX CLI v0.8.0
+
+- **Minimal startup** — no banner/debug spam in the conversation pane
+- **Enter sends**, Shift+Enter / Ctrl+J newline (PromptTextArea priority bindings)
+- **Send button** for mouse users
+- Sidebar session / New session / agent / model clicks
+- Headless pilot tests for submit, empty reject, send button
+
 ## HEX CLI v0.7.1 — stability
 
 - Fixed corrupted multiline prompt composer module (critical)

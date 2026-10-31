@@ -240,7 +240,27 @@ Screen {
     content-align: right middle;
 }
 
+#composer-row {
+    height: auto;
+    layout: horizontal;
+}
+#btn-send {
+    width: 10;
+    min-width: 8;
+    height: 5;
+    margin-left: 1;
+    background: #1f1635;
+    color: #c4b5fd;
+    border: tall #a78bfa;
+}
+#btn-send:hover {
+    background: #2d1f4e;
+}
+#btn-send:disabled {
+    opacity: 0.5;
+}
 #prompt-input {
+
     height: 5;
     min-height: 4;
     max-height: 12;

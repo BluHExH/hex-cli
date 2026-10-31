@@ -37,7 +37,13 @@ from hex_cli.tui.widgets.provider_dialogs import (
     ProvidersStatusDialog,
     SettingsDialog,
 )
-from hex_cli.tui.widgets.sidebar import NewSessionRequested, SessionSelected, Sidebar
+from hex_cli.tui.widgets.sidebar import (
+    AgentClicked,
+    ModelClicked,
+    NewSessionRequested,
+    SessionSelected,
+    Sidebar,
+)
 from hex_cli.tui.stage2_mixin import Stage2Mixin
 from hex_cli.providers.catalog import OPENROUTER_FREE_FALLBACK, discover_models, free_models_catalog
 from hex_cli.providers.credentials import (
@@ -130,10 +136,8 @@ class HexApp(Stage2Mixin, App[None]):
                 self._setup_agent()
                 self.state.status_message = "Ready"
                 self._show_banner()
-                self._post_system(
-                    f"Connected · {pcfg.name} · {self.state.model}. "
-                    "Describe a coding task, or type /models to switch models."
-                )
+                self.state.status_message = "Ready"
+                # Conversation stays clean; status is in footer/header only
             else:
                 self._agent = None
                 self.state.status_message = "Not connected"
@@ -150,38 +154,15 @@ class HexApp(Stage2Mixin, App[None]):
         self._refresh_chrome()
 
     def _show_onboarding(self) -> None:
-        specs = list_provider_specs()
-        lines = [
-            "Welcome to HEX — AI coding agent.",
-            "",
-            "No API key is configured yet. You can still explore the interface.",
-            "",
-            "Connect a provider:",
-            "  /connect          interactive provider + API key setup",
-            "  /models           browse models (free filter available)",
-            "  /providers        list connected providers",
-            "",
-            "Popular options:",
-        ]
-        for s in specs[:6]:
-            lines.append(f"  • {s.display_name}  ({s.api_key_env})")
-        lines.extend(
-            [
-                "",
-                "Free routes: use OpenRouter models ending in :free, or Ollama locally.",
-                "Type /help for all commands.",
-            ]
-        )
-        self._post_system("\n".join(lines))
+        # Minimal: leave welcome widget in ChatLog; one short status line only
+        self.state.status_message = "Not connected — /connect"
+        self._refresh_chrome()
+
 
     def _show_banner(self) -> None:
-        logo = HEX_LOGO.strip("\n")
-        meta = (
-            f"HEX CLI v{__version__}  ·  {self.project_root}\n"
-            f"{self.state.provider_name} · {self.state.model}\n"
-            f"{'Connected' if self.state.connected else 'Not connected — type /connect'}"
-        )
-        self._post_system(f"{logo}\n\n{meta}")
+        # Branding lives in header/sidebar only — do not spam the conversation
+        return
+
 
     def _setup_agent(self) -> None:
         assert self._provider is not None
@@ -812,6 +793,13 @@ class HexApp(Stage2Mixin, App[None]):
             pass
 
     @on(NewSessionRequested)
+    
+    def on_agent_clicked(self, event: AgentClicked) -> None:
+        self.action_cycle_agent()
+
+    def on_model_clicked(self, event: ModelClicked) -> None:
+        self.action_pick_model()
+
     def on_new_session_requested(self, _event: NewSessionRequested) -> None:
         self.action_new_session()
 

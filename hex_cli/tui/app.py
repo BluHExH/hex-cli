@@ -361,6 +361,67 @@ class HexApp(Stage2Mixin, App[None]):
         if lower in ("/settings",):
             self.action_show_settings()
             return
+        if lower in ("/plan",):
+            # Next free-text is handled as plan — if args provided, run immediately
+            rest = text.split(maxsplit=1)
+            if len(rest) == 2:
+                self._post_user(rest[1])
+                self.run_agent_task(rest[1], plan_only=True)
+            else:
+                self._post_status("Usage: /plan <task description>")
+            return
+        if lower in ("/diff", "/review"):
+            if self._agent and self._agent.changes.records:
+                self._post_system(self._agent.changes.all_diffs()[:8000])
+                s = self._agent.changes.summary()
+                self._post_system(
+                    f"Summary: {s['file_count']} files  +{s['added']}/-{s['removed']}"
+                )
+            else:
+                self._post_status("No agent changes recorded in this session.")
+            return
+        if lower in ("/undo",):
+            if self._agent:
+                result = self._agent.changes.undo_last()
+                if result.get("ok"):
+                    self._post_system(f"Undo: {result.get('restored')} ({result.get('action')})")
+                else:
+                    self._post_error(result.get("error", "undo failed"))
+            else:
+                self._post_status("Agent not ready.")
+            return
+        if lower in ("/tools",):
+            if self._agent:
+                lines = [f"• {t['name']} [{t['risk']}] — {t['description']}" for t in self._agent.tools_list()]
+                self._post_system("Tools:\n" + "\n".join(lines))
+            else:
+                from hex_cli.tools.registry import list_tools_for_display
+                lines = [f"• {t['name']} [{t['risk']}] — {t['description']}" for t in list_tools_for_display()]
+                self._post_system("Tools:\n" + "\n".join(lines))
+            return
+        if lower in ("/permissions",):
+            p = self.config.permissions
+            self._post_system(
+                "Permission modes:\n"
+                f"  read_files={p.read_files}\n"
+                f"  create_files={p.create_files}\n"
+                f"  modify_files={p.modify_files}\n"
+                f"  delete_files={p.delete_files}\n"
+                f"  run_commands={p.run_commands}\n"
+                f"  git_commit={p.git_commit}\n"
+                f"  git_push={p.git_push}"
+            )
+            return
+        if lower in ("/init",):
+            from hex_cli.tools.project import ProjectTools
+            from hex_cli.permissions import PermissionManager
+            pm = PermissionManager(self.config, self.project_root)
+            pt = ProjectTools(self.project_root, pm, self.config)
+            overview = pt.project_overview()
+            self._post_system(
+                "Project init:\n" + str(overview)
+            )
+            return
 
         if not self.state.connected or self._agent is None:
             self._post_status(
@@ -372,7 +433,7 @@ class HexApp(Stage2Mixin, App[None]):
         self.run_agent_task(text)
 
     @work(thread=True)
-    def run_agent_task(self, text: str) -> None:
+    def run_agent_task(self, text: str, plan_only: bool = False) -> None:
         self.state.busy = True
         self.state.status_message = "Thinking…"
         self.call_from_thread(self._refresh_chrome)
@@ -380,7 +441,7 @@ class HexApp(Stage2Mixin, App[None]):
             if self._agent is None:
                 self.call_from_thread(self._post_error, "Agent not ready. Check provider config.")
                 return
-            self._agent.run(text)
+            self._agent.run(text, plan_only=plan_only)
             self.state.status_message = "Ready"
         except Exception as e:
             self.call_from_thread(self._post_error, f"Agent error: {e}")

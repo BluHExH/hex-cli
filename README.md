@@ -1,3 +1,20 @@
+
+## Stage 3 — Coding agent
+
+HEX runs a real agent loop with tools:
+
+| Tool | Purpose |
+|------|---------|
+| `read_file` / `write_file` / `edit_file` / `apply_patch` | File operations (writes need approval) |
+| `list_files` / `glob` / `search_text` | Explore and search the project |
+| `run_command` / `run_tests` | Shell and tests (approval required) |
+| `project_overview` / `detect_project_type` | Project awareness |
+| `git_status` / `git_diff` | Git inspection |
+
+Commands: `/plan` (no mutations), `/diff`, `/undo`, `/tools`, `/permissions`, `/init`.
+
+Changes are tracked for review and undo. Secrets stay out of logs.
+
 # HEX CLI
 
 **HEX** is an AI coding agent that runs in your terminal. It understands natural-language development tasks, inspects your project, proposes changes, and executes tools only after you approve them.

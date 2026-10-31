@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 import json
+import threading
 from pathlib import Path
 from typing import Any, Callable
 
 from hex_cli.agent.prompts import build_system_prompt
+from hex_cli.changes.tracker import ChangeTracker
 from hex_cli.config import AppConfig
 from hex_cli.context import discover_project_summary, load_key_file_snippets
 from hex_cli.permissions import PermissionManager
 from hex_cli.providers.base import (
-    TOOL_SCHEMAS,
     BaseProvider,
     ChatMessage,
     ProviderError,
@@ -20,6 +21,8 @@ from hex_cli.providers.base import (
 from hex_cli.tools.commands import CommandTools
 from hex_cli.tools.filesystem import FileSystemTools
 from hex_cli.tools.git_tools import GitTools
+from hex_cli.tools.project import ProjectTools
+from hex_cli.tools.registry import openai_tool_schemas, get_tool_spec, list_tools_for_display
 from hex_cli import ui
 
 
@@ -41,11 +44,19 @@ class AgentLoop:
         self.fs = FileSystemTools(self.root, permissions, config)
         self.cmd = CommandTools(self.root, permissions, config)
         self.git = GitTools(self.root, permissions, config)
+        self.project = ProjectTools(self.root, permissions, config)
+        self.changes = ChangeTracker(self.root)
 
         self.messages: list[ChatMessage] = []
+        self.plan_mode: bool = False
+        self._cancel = threading.Event()
         self._init_system()
 
-    # ---- UI helpers (hooks override Rich defaults) ----
+    def request_cancel(self) -> None:
+        self._cancel.set()
+
+    def clear_cancel(self) -> None:
+        self._cancel.clear()
 
     def _ui(self, name: str, *args: Any, **kwargs: Any) -> Any:
         hook = self._hooks.get(name)
@@ -66,15 +77,28 @@ class AgentLoop:
         self._init_system()
         self._ui("print_info", "Conversation context cleared.")
 
-    def run(self, user_task: str) -> str:
+    def run(self, user_task: str, *, plan_only: bool = False) -> str:
         """Process a single user task through the agent loop."""
-        self.messages.append(ChatMessage(role="user", content=user_task))
+        self.clear_cancel()
+        self.plan_mode = plan_only
+        task = user_task
+        if plan_only:
+            task = (
+                "[PLAN MODE — do not call write_file, edit_file, apply_patch, "
+                "create_directory, or run_command. Only analyze and propose a plan.]\n\n"
+                + user_task
+            )
+        self.messages.append(ChatMessage(role="user", content=task))
 
         final_text = ""
         steps = 0
         max_steps = self.config.max_agent_steps
+        tools = openai_tool_schemas()
 
         while steps < max_steps:
+            if self._cancel.is_set():
+                self._ui("print_warning", "Agent cancelled.")
+                break
             steps += 1
             spinner_ctx = self._ui("spinner", f"Thinking (step {steps}/{max_steps})…")
             try:
@@ -82,9 +106,9 @@ class AgentLoop:
                     with spinner_ctx as progress:
                         if hasattr(progress, "add_task"):
                             progress.add_task("think")
-                        response = self.provider.chat(self.messages, tools=TOOL_SCHEMAS)
+                        response = self.provider.chat(self.messages, tools=tools)
                 else:
-                    response = self.provider.chat(self.messages, tools=TOOL_SCHEMAS)
+                    response = self.provider.chat(self.messages, tools=tools)
             except ProviderError as e:
                 self._ui("print_error", str(e))
                 return str(e)
@@ -92,11 +116,7 @@ class AgentLoop:
                 self._ui("print_error", f"Unexpected error: {e}")
                 return str(e)
 
-            # Record assistant message
-            assistant_msg = ChatMessage(
-                role="assistant",
-                content=response.content,
-            )
+            assistant_msg = ChatMessage(role="assistant", content=response.content)
             if response.tool_calls:
                 assistant_msg.tool_calls = [
                     {
@@ -116,12 +136,27 @@ class AgentLoop:
                 final_text = response.content
 
             if not response.tool_calls:
-                # Model is done
                 break
 
-            # Execute tools
             for tc in response.tool_calls:
-                result = self._dispatch_tool(tc)
+                if self._cancel.is_set():
+                    self._ui("print_warning", "Agent cancelled during tool execution.")
+                    break
+                # Block mutating tools in plan mode
+                if plan_only and tc.name in {
+                    "write_file", "edit_file", "apply_patch",
+                    "create_directory", "run_command", "run_tests",
+                }:
+                    result = {
+                        "ok": False,
+                        "skipped": True,
+                        "error": "Blocked in plan mode — no file/command mutations",
+                    }
+                    self._ui("print_tool_status", tc.name, "skipped", "plan mode")
+                else:
+                    result = self._dispatch_tool(tc)
+                    self._track_change(tc.name, result)
+
                 result_str = json.dumps(result, ensure_ascii=False, default=str)
                 if len(result_str) > 20_000:
                     result_str = result_str[:20_000] + "…(truncated)"
@@ -142,13 +177,47 @@ class AgentLoop:
                 "Increase max_agent_steps in config if needed.",
             )
 
+        # Change summary
+        summary = self.changes.summary()
+        if summary["file_count"]:
+            lines = [f"Changes: {summary['file_count']} file(s)  +{summary['added']}  -{summary['removed']}"]
+            for f in summary["files"]:
+                lines.append(f"  • {f['path']} ({f['action']}) +{f['added']}/-{f['removed']}")
+            self._ui("print_info", "\n".join(lines))
+
         return final_text
+
+    def _track_change(self, tool_name: str, result: dict[str, Any]) -> None:
+        if not result.get("ok"):
+            return
+        path = result.get("path")
+        if not path:
+            return
+        if tool_name == "write_file":
+            before = result.get("before")  # may be None for create
+            after = result.get("content") or result.get("after")
+            # write_file may not return content — re-read if needed
+            if after is None and path:
+                try:
+                    after = (self.root / str(path)).read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    after = None
+            action = "create" if before is None and result.get("created") else "modify"
+            if "created" in result or result.get("action") == "create":
+                action = "create"
+            self.changes.record(str(path), action, before, after)
+        elif tool_name in ("edit_file", "apply_patch"):
+            self.changes.record(
+                str(path),
+                "modify",
+                result.get("before"),
+                result.get("after"),
+            )
 
     def _dispatch_tool(self, tc: ToolCall) -> dict[str, Any]:
         name = tc.name
         args = tc.arguments if isinstance(tc.arguments, dict) else {}
 
-        # Reject raw/invalid argument blobs
         if "_raw" in args and len(args) == 1:
             self._ui("print_tool_status", name, "error", "invalid JSON arguments")
             return {"ok": False, "error": "Tool arguments were not valid JSON"}
@@ -170,6 +239,11 @@ class AgentLoop:
                 path=args.get("path", "."),
                 max_results=int(args.get("max_results", 30)),
             ),
+            "glob": lambda: self.fs.glob(
+                pattern=str(args.get("pattern", "")),
+                path=args.get("path", "."),
+                max_results=int(args.get("max_results", 100)),
+            ),
             "write_file": lambda: self.fs.write_file(
                 path=str(args.get("path", "")),
                 content=str(args.get("content", "")),
@@ -179,6 +253,10 @@ class AgentLoop:
                 old_string=str(args.get("old_string", "")),
                 new_string=str(args.get("new_string", "")),
                 replace_all=bool(args.get("replace_all", False)),
+            ),
+            "apply_patch": lambda: self.fs.apply_patch(
+                path=str(args.get("path", "")),
+                patch=str(args.get("patch", "")),
             ),
             "create_directory": lambda: self.fs.create_directory(
                 path=str(args.get("path", "")),
@@ -194,6 +272,8 @@ class AgentLoop:
             "git_diff": lambda: self.git.git_diff(
                 staged=bool(args.get("staged", False)),
             ),
+            "project_overview": lambda: self.project.project_overview(),
+            "detect_project_type": lambda: self.project.detect_project_type(),
         }
 
         handler = handlers.get(name)
@@ -201,12 +281,11 @@ class AgentLoop:
             self._ui("print_tool_status", name, "error", "unknown tool")
             return {"ok": False, "error": f"Unknown tool: {name}"}
 
-        # Basic argument validation
-        if name in ("read_file", "write_file", "edit_file", "create_directory"):
+        if name in ("read_file", "write_file", "edit_file", "create_directory", "apply_patch"):
             if not args.get("path"):
                 self._ui("print_tool_status", name, "error", "missing path")
                 return {"ok": False, "error": "path is required"}
-        if name == "search_text" and not args.get("pattern"):
+        if name in ("search_text", "glob") and not args.get("pattern"):
             self._ui("print_tool_status", name, "error", "missing pattern")
             return {"ok": False, "error": "pattern is required"}
         if name == "run_command" and not args.get("command"):
@@ -215,11 +294,12 @@ class AgentLoop:
         if name == "write_file" and "content" not in args:
             self._ui("print_tool_status", name, "error", "missing content")
             return {"ok": False, "error": "content is required"}
-        if name == "edit_file" and (
-            "old_string" not in args or "new_string" not in args
-        ):
+        if name == "edit_file" and ("old_string" not in args or "new_string" not in args):
             self._ui("print_tool_status", name, "error", "missing old_string/new_string")
             return {"ok": False, "error": "old_string and new_string are required"}
+        if name == "apply_patch" and "patch" not in args:
+            self._ui("print_tool_status", name, "error", "missing patch")
+            return {"ok": False, "error": "patch is required"}
 
         try:
             result = handler()
@@ -233,22 +313,25 @@ class AgentLoop:
             detail = ""
             if "path" in result:
                 detail = str(result["path"])
-            elif "exit_code" in result:
-                detail = f"exit {result['exit_code']}"
             elif "count" in result:
-                detail = f"{result['count']} items"
+                detail = f"{result['count']} hits"
+            elif "matches" in result:
+                detail = f"{len(result['matches'])} files"
             self._ui("print_tool_status", name, "ok", detail)
         else:
             self._ui("print_tool_status", name, "error", str(result.get("error", ""))[:80])
 
         return result
 
-    @staticmethod
-    def _short_args(name: str, args: dict[str, Any]) -> str:
-        if name in ("read_file", "write_file", "edit_file", "create_directory", "list_files"):
-            return str(args.get("path", ""))[:60]
-        if name == "search_text":
-            return str(args.get("pattern", ""))[:40]
-        if name == "run_command":
-            return str(args.get("command", ""))[:60]
+    def _short_args(self, name: str, args: dict[str, Any]) -> str:
+        if "path" in args:
+            return str(args["path"])
+        if "command" in args:
+            c = str(args["command"])
+            return c if len(c) < 60 else c[:57] + "…"
+        if "pattern" in args:
+            return str(args["pattern"])
         return ""
+
+    def tools_list(self) -> list[dict[str, str]]:
+        return list_tools_for_display()

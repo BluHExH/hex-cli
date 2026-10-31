@@ -219,6 +219,12 @@ class FileSystemTools:
             return {"ok": False, "error": str(e)}
 
         exists = target.exists()
+        original = None
+        if exists:
+            try:
+                original = target.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                original = None
         action = ActionType.MODIFY_FILE if exists else ActionType.CREATE_FILE
         desc = f"{'Overwrite' if exists else 'Create'} file {path}"
 
@@ -247,6 +253,10 @@ class FileSystemTools:
             "path": path,
             "bytes_written": len(content.encode("utf-8")),
             "created": not exists,
+            "action": "create" if not exists else "modify",
+            "before": original,
+            "after": content,
+            "content": content,
         }
 
     # ------------------------------------------------------------------
@@ -322,6 +332,9 @@ class FileSystemTools:
             "path": path,
             "replacements": count if replace_all else 1,
             "diff": diff_text,
+            "action": "modify",
+            "before": original,
+            "after": updated,
         }
 
     # ------------------------------------------------------------------
@@ -351,3 +364,124 @@ class FileSystemTools:
             return {"ok": False, "error": str(e)}
 
         return {"ok": True, "path": path, "created": True}
+
+    def glob(self, pattern: str, path: str = ".", max_results: int = 100) -> dict[str, Any]:
+        """Find files matching a glob pattern relative to path."""
+        if not pattern or not str(pattern).strip():
+            return {"ok": False, "error": "pattern is required"}
+        try:
+            base = self.perms.resolve_safe_path(path)
+        except PermissionError as e:
+            return {"ok": False, "error": str(e)}
+        if not base.exists():
+            return {"ok": False, "error": f"Path does not exist: {path}"}
+        matches: list[str] = []
+        try:
+            for p in sorted(base.glob(pattern)):
+                if any(part in SKIP_DIRS for part in p.parts):
+                    continue
+                try:
+                    rel = p.relative_to(self.root).as_posix()
+                except ValueError:
+                    continue
+                matches.append(rel)
+                if len(matches) >= max_results:
+                    break
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
+        return {
+            "ok": True,
+            "pattern": pattern,
+            "matches": matches,
+            "count": len(matches),
+            "truncated": len(matches) >= max_results,
+        }
+
+    def apply_patch(self, path: str, patch: str) -> dict[str, Any]:
+        """Apply a best-effort unified diff or full-content replacement.
+
+        Prefer edit_file for precise edits. This tool requires modify permission.
+        """
+        from hex_cli.permissions import ActionType
+
+        if not path:
+            return {"ok": False, "error": "path is required"}
+        if patch is None or patch == "":
+            return {"ok": False, "error": "patch is required"}
+        try:
+            target = self.perms.resolve_safe_path(path)
+        except PermissionError as e:
+            return {"ok": False, "error": str(e)}
+        if not target.is_file():
+            return {"ok": False, "error": f"Not a file: {path}"}
+
+        try:
+            before = target.read_text(encoding="utf-8", errors="replace")
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
+
+        body = [
+            ln
+            for ln in patch.splitlines()
+            if not ln.startswith("---")
+            and not ln.startswith("+++")
+            and not ln.startswith("@@")
+        ]
+        looks_unified = any(ln[:1] in {"+", "-", " "} for ln in body if ln)
+
+        if not looks_unified:
+            after = patch
+        else:
+            orig = before.splitlines(keepends=True)
+            out: list[str] = []
+            oi = 0
+            try:
+                for pl in body:
+                    if not pl and pl != "":
+                        continue
+                    tag = pl[:1] if pl else ""
+                    content = pl[1:] if tag in {"+", "-", " "} else pl
+                    if tag == " ":
+                        if oi < len(orig):
+                            out.append(orig[oi])
+                            oi += 1
+                        else:
+                            out.append(content + ("\n" if not content.endswith("\n") else ""))
+                    elif tag == "-":
+                        if oi < len(orig):
+                            oi += 1
+                    elif tag == "+":
+                        if not content.endswith("\n"):
+                            content = content + "\n"
+                        out.append(content)
+                if oi < len(orig):
+                    out.extend(orig[oi:])
+                after = "".join(out)
+            except Exception as e:
+                return {"ok": False, "error": f"Patch apply failed: {e}"}
+
+        # Fix accidental double-escaped newlines from generation
+        after = after.replace("\\n", "\n") if "\\n" in after else after
+
+        result = self.perms.check(
+            ActionType.MODIFY_FILE,
+            description=f"Apply patch to {path}",
+            path=path,
+            detail=after[:800],
+        )
+        if not result.allowed:
+            return {"ok": False, "skipped": True, "error": result.reason or "denied"}
+
+        try:
+            target.write_text(after, encoding="utf-8")
+        except OSError as e:
+            return {"ok": False, "error": str(e)}
+
+        return {
+            "ok": True,
+            "path": path,
+            "action": "modify",
+            "bytes": len(after.encode("utf-8")),
+            "before": before,
+            "after": after,
+        }

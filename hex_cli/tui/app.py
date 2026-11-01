@@ -66,6 +66,7 @@ class HexApp(Stage2Mixin, App[None]):
     CSS = HEX_CSS
     TITLE = f"HEX CLI v{__version__}"
     BINDINGS = [
+        ("ctrl+shift+c", "copy_code", "Copy code"),
         Binding("ctrl+c", "quit_app", "Quit", priority=True),
         Binding("ctrl+q", "quit_app", "Quit"),
         Binding("ctrl+l", "clear_chat", "Clear"),
@@ -1065,6 +1066,36 @@ class HexApp(Stage2Mixin, App[None]):
             self.handle_prompt(_Evt("/" + action_id))
         else:
             self._post_status(f"Unknown action: {action_id}")
+
+    
+    def action_copy_code(self) -> None:
+        """Copy the last fenced code block from the stream or last assistant message."""
+        from hex_cli.tui.markdown_util import last_code_block, extract_code_blocks
+        code = None
+        buf = getattr(self, "_stream_buf", "") or ""
+        if buf:
+            block = last_code_block(buf)
+            if block:
+                code = block[1]
+        if code is None:
+            # scan state messages
+            try:
+                for entry in reversed(list(self.state.messages)):
+                    if entry.kind == "assistant":
+                        blocks = extract_code_blocks(entry.text)
+                        if blocks:
+                            code = blocks[-1][1]
+                            break
+            except Exception:
+                pass
+        if not code:
+            self._post_status("No code block to copy.")
+            return
+        try:
+            self.copy_to_clipboard(code)
+            self._post_status(f"Copied {len(code)} chars to clipboard.")
+        except Exception as e:
+            self._post_status(f"Clipboard failed: {e}")
 
     def action_stop_agent(self) -> None:
         if self._agent and self.state.busy:

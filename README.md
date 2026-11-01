@@ -1,3 +1,10 @@
+## HEX CLI v1.2.0
+
+- Live assistant **token streaming** into one Markdown message
+- Safe partial Markdown / code-fence rendering while streaming
+- **Ctrl+Shift+C** copies the last fenced code block
+- Smart auto-scroll (pauses when you scroll up)
+
 ## HEX CLI v1.1.0
 
 - Full-screen layout polish (sidebar, conversation, composer)

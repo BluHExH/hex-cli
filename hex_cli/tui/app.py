@@ -30,6 +30,12 @@ from hex_cli.tui.widgets.dialogs import HelpDialog, PermissionDialog, SelectDial
 from hex_cli.tui.widgets.header import HeaderBar
 from hex_cli.tui.widgets.input_panel import InputPanel, PromptSubmitted
 from hex_cli.tui.widgets.activity_bar import ActivityBar
+from hex_cli.tui.widgets.diff_review import (
+    DiffAccept,
+    DiffReject,
+    DiffReviewClosed,
+    DiffReviewPanel,
+)
 from hex_cli.tui.widgets.command_palette import CommandPalette
 from hex_cli.tui.widgets.file_picker import FilePicker
 from hex_cli.tui.widgets.provider_dialogs import (
@@ -677,14 +683,7 @@ class HexApp(Stage2Mixin, App[None]):
             self._compact_session()
             return
         if lower in ("/diff", "/review"):
-            if self._agent and self._agent.changes.records:
-                self._post_system(self._agent.changes.all_diffs()[:8000])
-                s = self._agent.changes.summary()
-                self._post_system(
-                    f"Summary: {s['file_count']} files  +{s['added']}/-{s['removed']}"
-                )
-            else:
-                self._post_status("No agent changes recorded in this session.")
+            self.action_open_diff_review()
             return
         if lower in ("/undo",):
             if self._agent:
@@ -1068,6 +1067,78 @@ class HexApp(Stage2Mixin, App[None]):
             self._post_status(f"Unknown action: {action_id}")
 
     
+
+    def action_open_diff_review(self) -> None:
+        """Mount interactive DiffReviewPanel for pending ChangeTracker entries."""
+        if not self._agent or not self._agent.changes.records:
+            self._post_status("No agent changes recorded in this session.")
+            return
+        s = self._agent.changes.summary()
+        files = ", ".join(f["path"] for f in s.get("files", [])[:12])
+        self._post_system(
+            f"Changes ready for review — {s['file_count']} files  "
+            f"+{s['added']}/-{s['removed']}\n{files}\n"
+            "Opening Diff Review (A accept · R reject · ← → navigate)."
+        )
+        # Remove existing panel if any
+        try:
+            old = self.query_one("#diff-review", DiffReviewPanel)
+            old.remove()
+        except Exception:
+            pass
+        try:
+            chat = self.query_one(ChatLog)
+            panel = DiffReviewPanel(self._agent.changes)
+            chat.mount(panel)
+            chat.scroll_end(animate=False)
+            panel.focus()
+        except Exception as e:
+            self._post_error(f"Diff review failed: {e}")
+
+    def on_diff_accept(self, event: DiffAccept) -> None:
+        if not self._agent:
+            return
+        result = self._agent.changes.accept_file(event.path)
+        try:
+            panel = self.query_one("#diff-review", DiffReviewPanel)
+            if result.get("ok"):
+                panel.remove_path(event.path, f"Accepted {event.path}")
+                self._post_system(f"Accepted changes for {event.path}")
+            else:
+                panel.status_note = result.get("error", "accept failed")
+                panel._refresh()
+                self._post_error(result.get("error", "accept failed"))
+            if not panel.paths:
+                panel.remove()
+        except Exception:
+            pass
+
+    def on_diff_reject(self, event: DiffReject) -> None:
+        if not self._agent:
+            return
+        result = self._agent.changes.reject_file(event.path)
+        try:
+            panel = self.query_one("#diff-review", DiffReviewPanel)
+            if result.get("ok"):
+                panel.remove_path(event.path, f"Rejected {event.path} ({result.get('action')})")
+                self._post_system(
+                    f"Rejected {event.path}: {result.get('action', 'restored')}"
+                )
+            else:
+                panel.status_note = result.get("error", "reject failed")
+                panel._refresh()
+                self._post_error(result.get("error", "reject failed"))
+            if not panel.paths:
+                panel.remove()
+        except Exception:
+            pass
+
+    def on_diff_review_closed(self, event: DiffReviewClosed) -> None:
+        try:
+            self.query_one("#diff-review", DiffReviewPanel).remove()
+        except Exception:
+            pass
+
     def action_copy_code(self) -> None:
         """Copy the last fenced code block from the stream or last assistant message."""
         from hex_cli.tui.markdown_util import last_code_block, extract_code_blocks

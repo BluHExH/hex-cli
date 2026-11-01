@@ -398,6 +398,31 @@ Button.-primary {
     border-left: tall #a78bfa;
 }
 
+
+#diff-review {
+    height: auto;
+    max-height: 24;
+    margin: 1 1;
+    padding: 1;
+    background: #0d1117;
+    border: solid #30363d;
+}
+#diff-header {
+    height: auto;
+    padding-bottom: 1;
+}
+#diff-body {
+    height: 12;
+    border: solid #21262d;
+}
+#diff-actions {
+    height: 3;
+    padding-top: 1;
+}
+#diff-footer {
+    height: 1;
+    color: #6e7681;
+}
 """
 
 HEX_LOGO = """

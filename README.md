@@ -1,3 +1,10 @@
+## HEX CLI v1.3.0
+
+- **Diff Review**: `/diff` opens in-chat review of agent file changes
+- **Accept / Reject** with external-edit conflict protection
+- Multi-file navigation (Prev/Next, A/R keys)
+- ChangeTracker remains the source of truth; `/undo` still works
+
 ## HEX CLI v1.2.0
 
 - Live assistant **token streaming** into one Markdown message

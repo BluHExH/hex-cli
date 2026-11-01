@@ -402,7 +402,14 @@ class AgentLoop:
             return {"ok": False, "error": str(e)}
 
         if result.get("skipped"):
-            self._ui("print_tool_status", name, "skipped", result.get("error", "rejected"))
+            self._ui(
+                "print_tool_status",
+                name,
+                "skipped",
+                result.get("error", "rejected"),
+                "",
+                str(result.get("error", "rejected")),
+            )
         elif result.get("ok"):
             detail = ""
             if "path" in result:
@@ -411,9 +418,28 @@ class AgentLoop:
                 detail = f"{result['count']} hits"
             elif "matches" in result:
                 detail = f"{len(result['matches'])} files"
-            self._ui("print_tool_status", name, "ok", detail)
+            elif "command" in result:
+                detail = str(result.get("command", ""))[:80]
+            # Build safe output preview (no secrets)
+            preview_parts = []
+            for k in ("stdout", "output", "content", "diff", "message", "summary"):
+                if result.get(k):
+                    preview_parts.append(str(result[k])[:2000])
+            if "files" in result and isinstance(result["files"], list):
+                preview_parts.append("\n".join(str(x) for x in result["files"][:40]))
+            if "matches" in result and isinstance(result["matches"], list):
+                preview_parts.append("\n".join(str(x) for x in result["matches"][:40]))
+            output = "\n".join(preview_parts)[:4000]
+            self._ui("print_tool_status", name, "ok", detail, output, "")
         else:
-            self._ui("print_tool_status", name, "error", str(result.get("error", ""))[:80])
+            self._ui(
+                "print_tool_status",
+                name,
+                "error",
+                str(result.get("error", ""))[:80],
+                "",
+                str(result.get("error", ""))[:500],
+            )
 
         return result
 

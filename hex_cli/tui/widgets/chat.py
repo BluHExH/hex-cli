@@ -108,6 +108,7 @@ class ChatLog(VerticalScroll):
         self.scroll_end(animate=False)
 
 
+
     def append_tool_card(
         self,
         tool_name: str,
@@ -115,41 +116,43 @@ class ChatLog(VerticalScroll):
         detail: str = "",
         output: str = "",
         error: str = "",
+        card_key: str | None = None,
     ) -> str:
-        """Render a structured tool line; returns message widget id."""
-        from hex_cli.tui.state import ChatEntry
-        icon = {
-            "running": "⟳",
-            "ok": "✓",
-            "completed": "✓",
-            "error": "✗",
-            "failed": "✗",
-            "skipped": "⊘",
-            "denied": "⊘",
-            "cancelled": "–",
-        }.get(status, "•")
-        body = f"{icon}  [bold]{tool_name}[/] [{status}]"
-        if detail:
-            body += f"  {detail[:100]}"
-        if output and status in ("ok", "completed", "error", "failed"):
-            preview = output[:400].replace("[", "\\[")
-            body += f"\n[dim]{preview}[/]"
-        if error:
-            body += f"\n[red]{error[:300]}[/]"
-        entry = ChatEntry(kind="tool", text=body.replace("[bold]", "").replace("[/]", "").replace("[dim]", "").replace("[/dim]", "").replace("[red]", "").replace("[/red]", ""), meta={"status": status, "tool": tool_name})
-        # Use rich markup version
+        """Create or update an expandable ToolCard for a real tool event."""
+        from hex_cli.tui.widgets.tool_card import ToolCard, status_from_string
+
         if self._has_welcome:
             try:
                 self.query_one("#welcome-msg").remove()
             except Exception:
                 pass
             self._has_welcome = False
-        wid = _next_msg_id()
-        safe_body = body  # already escaped partially
-        widget = Static(safe_body, classes="message message-tool", id=wid, markup=True)
-        self.mount(widget)
+
+        if not hasattr(self, "_tool_cards"):
+            self._tool_cards: dict[str, ToolCard] = {}
+
+        # Reuse running card for same tool+detail while still running
+        key = card_key
+        if not key:
+            # Prefer matching an existing RUNNING card for this tool
+            for k, card in list(self._tool_cards.items()):
+                if card.tool_name == tool_name and card.state.value == "running":
+                    key = k
+                    break
+            if not key:
+                key = f"{tool_name}-{id(object())}-{int(__import__('time').time()*1000)%100000}"
+
+        card = self._tool_cards.get(key)
+        if card is None:
+            wid = _next_msg_id()
+            card = ToolCard(tool_name, detail=detail, card_key=key, id=wid)
+            self._tool_cards[key] = card
+            self.mount(card)
+            self.scroll_end(animate=False)
+        card.set_status(status, detail=detail or None, output=output, error=error)
         self.scroll_end(animate=False)
-        return wid
+        return key
+
 
     def update_message(self, widget_id: str, text: str, kind: str = "assistant") -> None:
         """Update an existing message widget (streaming)."""
@@ -183,6 +186,7 @@ class ChatLog(VerticalScroll):
         return wid
 
     def clear_messages(self, *, banner: str | None = None) -> None:
+        self._tool_cards = {}
         try:
             self.remove_children()
         except Exception:

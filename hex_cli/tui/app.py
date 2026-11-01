@@ -185,8 +185,8 @@ class HexApp(Stage2Mixin, App[None]):
             "print_assistant": lambda text: self.call_from_thread(
                 self._post_assistant, text
             ),
-            "print_tool_status": lambda name, status, detail="": self.call_from_thread(
-                self._post_tool, name, status, detail
+            "print_tool_status": lambda name, status, detail="", output="", error="": self.call_from_thread(
+                self._post_tool, name, status, detail, output, error
             ),
             "print_error": lambda msg: self.call_from_thread(self._post_error, msg),
             "print_warning": lambda msg: self.call_from_thread(

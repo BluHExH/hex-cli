@@ -1,8 +1,9 @@
-"""HEX TUI theme — professional dark coding-agent aesthetic (OpenCode-inspired layout)."""
+"""HEX TUI theme — professional dark coding-agent aesthetic."""
 
 from __future__ import annotations
 
 HEX_CSS = """
+
 Screen {
     background: #0b0f14;
     color: #e6edf3;
@@ -50,7 +51,7 @@ Screen {
 /* ── Left sidebar ───────────────────────────────────────── */
 #sidebar {
     dock: left;
-    width: 28;
+    width: 26;
     background: #0d1117;
     border-right: solid #1c2333;
     height: 1fr;
@@ -377,6 +378,26 @@ Button.-primary {
     color: #c4b5fd;
     border: tall #a78bfa;
 }
+.tool-card {
+    margin: 0 1 1 1;
+    padding: 1 2;
+    background: #0d1117;
+    border: solid #21262d;
+    height: auto;
+}
+.tool-card:hover {
+    border: solid #30363d;
+}
+.tool-card:focus {
+    border: solid #a78bfa;
+}
+.message-user {
+    border-left: tall #58a6ff;
+}
+.message-assistant {
+    border-left: tall #a78bfa;
+}
+
 """
 
 HEX_LOGO = """
@@ -388,4 +409,4 @@ HEX_LOGO = """
 ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝
 """
 
-HEX_BRAND_LINE = "HEX"
+HEX_BRAND_LINE = "HEX CLI · Powered by HEX · NeonBuild"

@@ -1,3 +1,10 @@
+## HEX CLI v1.1.0
+
+- Full-screen layout polish (sidebar, conversation, composer)
+- Expandable **tool execution cards** driven by real agent events
+- Click/keyboard expand for tool output
+- Activity bar synced to real tool phases
+
 ## HEX CLI v1.0.0
 
 Professional terminal AI coding agent by **NeonBuild** (*Powered by HEX*).

@@ -684,8 +684,11 @@ class HexApp(Stage2Mixin, App[None]):
         if lower in ("/editor",):
             self.action_external_editor()
             return
-        if lower in ("/export",):
-            self._export_conversation()
+        if lower in ("/export", "/export markdown"):
+            self._export_session("markdown")
+            return
+        if lower in ("/export json",):
+            self._export_session("json")
             return
         if lower in ("/compact", "/summarize"):
             self._compact_session()
@@ -790,6 +793,26 @@ class HexApp(Stage2Mixin, App[None]):
     # Actions
     # ------------------------------------------------------------------
 
+
+    def _export_session(self, fmt: str = "markdown") -> None:
+        from pathlib import Path as P
+        pid = self.state.persist_active()
+        if not pid:
+            self._post_status("Nothing to export.")
+            return
+        store = self.state.store
+        body = store.export_json(pid) if fmt == "json" else store.export_markdown(pid)
+        if not body:
+            self._post_error("Export failed.")
+            return
+        ext = "json" if fmt == "json" else "md"
+        out = P(self.project_root) / f"hex-session-{pid}.{ext}"
+        try:
+            out.write_text(body, encoding="utf-8")
+            self._post_system(f"Exported session to {out}")
+        except OSError as e:
+            self._post_error(f"Export write failed: {e}")
+
     def action_quit_app(self) -> None:
         if self.state.busy:
             self._post_status("Agent still running — press Ctrl+C again to force quit.")
@@ -812,6 +835,10 @@ class HexApp(Stage2Mixin, App[None]):
         self.query_one(InputPanel).focus_input()
 
     def action_new_session(self) -> None:
+        try:
+            self.state.persist_active()
+        except Exception:
+            pass
         session = self.state.new_session()
         if self._agent:
             try:
@@ -848,6 +875,10 @@ class HexApp(Stage2Mixin, App[None]):
 
     @on(SessionSelected)
     def on_session_selected(self, event: SessionSelected) -> None:
+        try:
+            self.state.persist_active()
+        except Exception:
+            pass
         if not self.state.switch_session(event.session_id):
             return
         # Rebuild chat from stored entries

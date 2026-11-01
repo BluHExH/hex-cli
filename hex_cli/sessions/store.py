@@ -168,7 +168,10 @@ class SessionStore:
             for k in list(data["meta"].keys()):
                 if "key" in k.lower() or "token" in k.lower() or "secret" in k.lower():
                     data["meta"].pop(k, None)
-        path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        payload = json.dumps(data, indent=2, ensure_ascii=False)
+        tmp = path.with_suffix(".json.tmp")
+        tmp.write_text(payload, encoding="utf-8")
+        tmp.replace(path)  # atomic on same filesystem
 
     def load(self, session_id: str) -> StoredSession | None:
         path = self._path(session_id)
@@ -261,3 +264,42 @@ class SessionStore:
         session.messages = list(messages)
         self.save(session)
         return True
+
+    def export_markdown(self, session_id: str) -> str | None:
+        session = self.load(session_id)
+        if not session:
+            return None
+        m = session.meta
+        lines = [
+            f"# {m.name}",
+            "",
+            f"- **Session ID:** `{m.id}`",
+            f"- **Project:** `{m.project_root}`",
+            f"- **Provider:** {m.provider or '—'}  **Model:** {m.model or '—'}",
+            f"- **Agent:** {m.agent}",
+            f"- **Created:** {m.created_at}",
+            f"- **Updated:** {m.updated_at}",
+            "",
+            "---",
+            "",
+        ]
+        for msg in session.messages:
+            role = (msg.role or "user").upper()
+            body = msg.content or ""
+            lines.append(f"### {role}")
+            lines.append("")
+            lines.append(body)
+            lines.append("")
+        return "\n".join(lines)
+
+    def export_json(self, session_id: str) -> str | None:
+        session = self.load(session_id)
+        if not session:
+            return None
+        data = session.to_dict()
+        # strip secrets again
+        meta = data.get("meta") or {}
+        for k in list(meta.keys()):
+            if any(x in k.lower() for x in ("key", "token", "secret", "password")):
+                meta.pop(k, None)
+        return json.dumps(data, indent=2, ensure_ascii=False)

@@ -99,6 +99,17 @@ class SessionState:
     def add(self, kind: str, text: str, **meta: Any) -> ChatEntry:
         entry = ChatEntry(kind=kind, text=text, meta=meta)
         self.active_session.entries.append(entry)
+        # Auto-title from first user message if still default name
+        s = self.active_session
+        if kind == "user" and s.name.startswith("Session "):
+            title = (text or "").strip().splitlines()[0][:48]
+            if title:
+                s.name = title
+        # Best-effort auto-persist (ignore failures)
+        try:
+            self.persist_active()
+        except Exception:
+            pass
         return entry
 
     def clear_conversation(self) -> None:

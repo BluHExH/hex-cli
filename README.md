@@ -1,3 +1,11 @@
+## HEX CLI v1.5.0
+
+- Persistent multi-session workspace (atomic disk saves)
+- Auto-save messages; auto-title from first prompt
+- `/export` / `/export json` session export (no secrets)
+- Safer session switch with persist-before-switch
+- Search, rename, delete via existing commands + sidebar
+
 ## HEX CLI v1.4.0
 
 - Inline **`@file` autocomplete** with fuzzy project search

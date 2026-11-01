@@ -1,3 +1,9 @@
+## HEX CLI v1.5.1
+
+- Minimal OpenCode-inspired empty state and status footer
+- Sidebar hidden by default (`ctrl+b` to toggle)
+- `ctrl+p` command list
+
 ## HEX CLI v1.5.0
 
 - Persistent multi-session workspace (atomic disk saves)

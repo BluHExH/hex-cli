@@ -45,23 +45,13 @@ class ChatLog(VerticalScroll):
 
     @staticmethod
     def _welcome_markup() -> str:
-        lines = [
-            "",
-            "[bold #a78bfa]██╗  ██╗███████╗██╗  ██╗[/]",
-            "[bold #a78bfa]██║  ██║██╔════╝╚██╗██╔╝[/]",
-            "[bold #a78bfa]███████║█████╗   ╚███╔╝[/]",
-            "[bold #a78bfa]██╔══██║██╔══╝   ██╔██╗[/]",
-            "[bold #a78bfa]██║  ██║███████╗██╔╝ ██╗[/]",
-            "[bold #a78bfa]╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝[/]",
-            "",
-            "[bold]Your AI Coding Workspace[/]",
-            "[dim]Build. Create. Explore.[/]",
-            "",
-            "[dim]Powered by HEX  ·  By NeonBuild[/]",
-            "",
-            "[dim]Enter a task below  ·  /provider  ·  /models  ·  /help[/]",
-        ]
-        return "\n".join(lines)
+        # OpenCode-style minimal empty state (HEX branding, not OpenCode name)
+        return (
+            "\n\n"
+            "[bold]Hi! How can I help you today?[/]\n\n"
+            "[dim]Type a task  ·  @file  ·  / for commands  ·  ctrl+p palette[/]\n"
+            "[dim]Powered by HEX · NeonBuild[/]"
+        )
 
     def _dismiss_welcome(self) -> None:
         if not self._has_welcome:

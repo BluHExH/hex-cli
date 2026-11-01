@@ -318,6 +318,11 @@ Screen {
 
 /* ── Status footer ──────────────────────────────────────── */
 #footer-bar {
+    height: 1;
+    background: #010409;
+    color: #8b949e;
+    text-style: none;
+
     dock: bottom;
     height: 1;
     background: #010409;

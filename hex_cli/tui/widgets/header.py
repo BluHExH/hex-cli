@@ -1,4 +1,4 @@
-"""Top header bar for HEX TUI."""
+"""Top header bar for HEX TUI — minimal OpenCode-like chrome."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from textual.widgets import Static
 
 
 class HeaderBar(Static):
-    """HEX branding + project + provider + connection status."""
+    """Thin top strip: brand + short connection hint."""
 
     project: reactive[str] = reactive("")
     provider: reactive[str] = reactive("")
@@ -19,15 +19,15 @@ class HeaderBar(Static):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="header"):
-            yield Static(" ⬡ HEX ", id="header-brand")
+            yield Static(" HEX ", id="header-brand")
             yield Static("", id="header-project")
             yield Static("", id="header-provider")
-            yield Static("○ offline", id="header-status", classes="status-err")
+            yield Static("", id="header-status")
 
     def watch_project(self, value: str) -> None:
+        # Path shown in footer (OpenCode-style); keep header quiet
         try:
-            name = value.replace("\\", "/").rstrip("/").split("/")[-1] if value else ""
-            self.query_one("#header-project", Static).update(f"  {name}")
+            self.query_one("#header-project", Static).update("")
         except Exception:
             pass
 
@@ -44,20 +44,16 @@ class HeaderBar(Static):
         try:
             w = self.query_one("#header-status", Static)
             if value:
-                w.update("● online")
-                w.set_classes("status-ok")
+                w.update("")
             else:
-                w.update("○ offline")
+                w.update(" offline — /provider")
                 w.set_classes("status-err")
         except Exception:
             pass
 
     def _refresh_provider(self) -> None:
+        # Model lives in footer status line
         try:
-            model = self.model
-            if len(model) > 36:
-                model = model[:33] + "…"
-            label = f"{self.provider} · {model}" if model else self.provider
-            self.query_one("#header-provider", Static).update(label)
+            self.query_one("#header-provider", Static).update("")
         except Exception:
             pass

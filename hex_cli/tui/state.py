@@ -53,7 +53,7 @@ class SessionState:
     model: str
     connected: bool = False
     status_message: str = "Ready"
-    sidebar_visible: bool = True
+    sidebar_visible: bool = False
     busy: bool = False
     sessions: list[Session] = field(default_factory=list)
     active_session_id: str = ""

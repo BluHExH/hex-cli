@@ -380,12 +380,36 @@ class HexApp(Stage2Mixin, App[None]):
             pass
 
     def _tick_footer(self) -> None:
+        """OpenCode-style status chrome: agent · model · path · ctx · commands · version."""
         try:
-            busy = "● busy" if self.state.busy else "● idle"
+            from hex_cli import __version__
+            agent = getattr(self.state, "agent", "general")
+            # Display agent like OpenCode "Build"
+            agent_label = agent.capitalize() if agent else "General"
+            model = self.state.model or "—"
+            if len(model) > 28:
+                model = model[:25] + "…"
+            path = str(self.project_root)
+            if len(path) > 36:
+                path = "…" + path[-34:]
+            # Approximate context from active session message chars
+            ctx_chars = 0
+            try:
+                for e in self.state.entries:
+                    ctx_chars += len(e.text or "")
+            except Exception:
+                pass
+            ctx_k = ctx_chars / 1000.0
+            # Soft percent vs a 200k soft budget (display only)
+            pct = min(100.0, (ctx_chars / 200_000) * 100.0)
+            busy = ""
+            if self.state.busy:
+                busy = " · working"
+            lsp = "LSPs off"  # honest: full LSP UI not primary yet
             text = (
-                f" {self.state.model}  ·  {self.state.provider_name}  ·  "
-                f"{self.project_root.name}  ·  {busy}  ·  "
-                f"{self.state.status_message}"
+                f" {agent_label} · {model}{busy}  {lsp}   "
+                f"{path}  {ctx_k:.1f}K ({pct:.0f}%)  "
+                f"ctrl+p commands · HEX {__version__}"
             )
             self.query_one("#footer-bar", Static).update(text)
         except Exception:

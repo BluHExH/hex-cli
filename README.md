@@ -1,3 +1,10 @@
+## HEX CLI v1.4.0
+
+- Inline **`@file` autocomplete** with fuzzy project search
+- **Real context injection**: selected files' contents are attached for the model
+- Path traversal and sensitive files blocked from auto-inject
+- Enter/Tab select · Esc close · multiple `@` mentions per message
+
 ## HEX CLI v1.3.0
 
 - **Diff Review**: `/diff` opens in-chat review of agent file changes

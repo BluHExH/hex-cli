@@ -61,6 +61,7 @@ from hex_cli.providers.credentials import (
 )
 from hex_cli.providers.registry import list_provider_specs
 from hex_cli.knowledge.identity import try_offline_identity
+from hex_cli.context.file_mentions import inject_file_context, extract_mentions
 
 # Fallback free presets (OpenRouter :free convention only — never invent paid-as-free)
 FREE_MODEL_PRESETS = list(OPENROUTER_FREE_FALLBACK)
@@ -125,6 +126,13 @@ class HexApp(Stage2Mixin, App[None]):
         yield Static("", id="footer-bar")
 
     def on_mount(self) -> None:
+        try:
+            self.query_one(InputPanel).set_project_root(self.project_root)
+        except Exception:
+            pass
+        self._on_mount_rest()
+
+    def _on_mount_rest(self) -> None:
         self._refresh_chrome()
         self.query_one(InputPanel).focus_input()
         self.set_interval(0.5, self._tick_footer)
@@ -917,33 +925,27 @@ class HexApp(Stage2Mixin, App[None]):
             self._post_error(f"!command failed: {exc}")
 
     def _expand_at_files(self, text: str) -> str:
-        """Expand @path references by appending file contents (read-only, size-capped)."""
-        import re
-        refs = re.findall(r"@([\w./\\-]+)", text)
-        if not refs:
-            return text
-        extras = []
-        for ref in refs[:8]:
-            path = (self.project_root / ref).resolve()
+        """Inject real file contents for @mentions into the agent message."""
+        try:
+            augmented, meta = inject_file_context(text, Path(self.project_root))
+            ok = sum(1 for m in meta if m.get("ok"))
+            if meta:
+                self.call_from_thread(
+                    self._post_status,
+                    f"Attached {ok}/{len(meta)} file(s) as context",
+                ) if False else None
+                # status from UI thread paths - when called from handle_prompt on main thread:
+                try:
+                    self._post_status(f"Attached {ok}/{len(meta)} file(s) as context")
+                except Exception:
+                    pass
+            return augmented
+        except Exception as e:
             try:
-                path.relative_to(self.project_root.resolve())
-            except ValueError:
-                extras.append(f"[skipped {ref}: outside project]")
-                continue
-            if not path.is_file():
-                extras.append(f"[skipped {ref}: not a file]")
-                continue
-            try:
-                raw = path.read_text(encoding="utf-8", errors="replace")
-                if len(raw) > 12000:
-                    raw = raw[:12000] + "\n…(truncated)"
-                extras.append(f"--- file: {ref} ---\n{raw}")
-            except OSError as e:
-                extras.append(f"[skipped {ref}: {e}]")
-        if not extras:
+                self._post_status(f"File context: {e}")
+            except Exception:
+                pass
             return text
-        return text + "\n\n" + "\n\n".join(extras)
-
 
 
     def action_file_picker(self) -> None:

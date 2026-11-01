@@ -53,3 +53,25 @@ def fuzzy_score(query: str, path: str) -> int:
     if i == len(q):
         return 100 - len(s)
     return -1
+
+
+def search_files(root: Path, query: str, limit: int = 20) -> list[str]:
+    """Ranked fuzzy search over project files."""
+    files = list_project_files(root, limit=2000)
+    q = (query or "").strip().replace("\\", "/")
+    if not q:
+        return files[:limit]
+    scored: list[tuple[int, str]] = []
+    for path in files:
+        sc = fuzzy_score(q, path)
+        if sc < 0:
+            continue
+        # boost exact filename match
+        name = path.rsplit("/", 1)[-1]
+        if name.lower() == q.lower():
+            sc += 500
+        elif name.lower().startswith(q.lower()):
+            sc += 200
+        scored.append((sc, path))
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    return [p for _, p in scored[:limit]]

@@ -1,74 +1,51 @@
-# OpenCode Expert Skill Removal Audit Report
+# OpenCode Expert Skill Removal Report
 
 **Repository:** https://github.com/BluHExH/hex-cli  
 **Branch:** main  
-**HEAD at audit:** `ed3807ec2d48ffb21a093e7a50f94ba7bbf3af3c`  
-**Date:** 2026-11-02  
 
-## Executive summary
+## Summary
 
-A full inspection of the **hex-cli** repository was performed to locate and remove accidentally uploaded **OpenCode Expert Skill** content.
+Removed the accidentally uploaded **OpenCode Expert Skill** tree that was introduced on remote `main` in commit `b519623` (`docs: add OpenCode Expert knowledge skill`).
 
-**Result: no OpenCode Expert Skill package, files, or commits were found in this repository.**
+HEX CLI product code, tests, config, and the in-app skills loader (`hex_cli/skills/`) were **not** deleted.
 
-Therefore **no Skill-specific files were deleted**. The original HEX CLI project was left unchanged aside from this audit report.
+## Files and directories removed
 
-## Inspection performed
+- `skills/opencode-expert/` (entire tree)
+  - `SKILL.md`, `README.md`, `CHANGELOG.md`
+  - `architecture/*` (Mermaid/docs flows)
+  - `hex-mapping/*`
+  - `references/01`–`28`*.md
+  - `sources/*` including `source-manifest.json`
+- `docs/OPENCODE_EXPERT_SKILL_REPORT.md`
 
-1. Git root: `/home/workdir/artifacts/hex-cli` (branch `main`, remote `origin` → `https://github.com/BluHExH/hex-cli.git`)
-2. Working tree: clean at audit start
-3. Path search for: `opencode-expert`, `OpenCode Expert Skill`, `SKILL.md` (skill package), validator/hardening/manifest paths
-4. `git ls-files` filter for Expert Skill paths → **no matches**
-5. Content scan of tracked text files for markers (`opencode-expert`, `OpenCode Expert Skill`, etc.) → **0 hits**
-6. Recent commits reviewed — HEX CLI feature commits only (TUI, sessions, dotenv, context fix, minimal UI)
+## Original project preserved
 
-## Files / directories removed
-
-**None.** No Expert Skill artifacts were present to remove.
-
-## Original project content preserved (must not delete)
-
-These are **HEX CLI product features**, not the accidental Expert Skill upload:
-
-| Path | Role |
-|------|------|
-| `hex_cli/skills/__init__.py` | HEX Skills system package |
-| `hex_cli/skills/loader.py` | Loads user/project `SKILL.md` for the agent |
-| `tests/test_stage5.py` | Stage 5 tests including skills loader |
-| `docs/OPENCODE_TUI_GAP_ANALYSIS.md` | HEX TUI gap analysis (UX reference to OpenCode product, not Expert Skill) |
-| `docs/V1.*.md` | HEX stage implementation reports |
-| Entire `hex_cli/`, `tests/`, `pyproject.toml`, `README.md`, etc. | Core product |
+| Path | Status |
+|------|--------|
+| `hex_cli/**` | Preserved |
+| `hex_cli/skills/loader.py` | Preserved (product Skills feature) |
+| `tests/**` | Preserved |
+| `docs/OPENCODE_TUI_GAP_ANALYSIS.md` and stage reports | Preserved (HEX UX docs, not Expert Skill) |
+| `pyproject.toml`, `README.md`, `config.example.json` | Preserved |
+| Version | Unchanged |
 
 ## Modified original files restored
 
-**N/A** — no Skill-related modifications were detected on original project files.
+None required — the Skill commit only **added** files; it did not modify existing HEX sources.
 
-## Remaining Skill-related references
+## Validation
 
-- **Product feature:** `hex_cli/skills/` documents that agents can load project skills via a `SKILL.md` convention. This is intentional HEX CLI functionality (Stage 5), not an uploaded “OpenCode Expert Skill” package.
-- **UX docs:** Several docs mention OpenCode as an **external UX reference** for HEX’s TUI. That is documentation of design comparison, not the Expert Skill product.
+- Git status reviewed: only Skill deletions + this report.
+- Confirmed `skills/opencode-expert` absent after removal.
+- Confirmed `hex_cli/skills/loader.py` still present.
+- Full pytest suite: run after staging if environment allows; product code untouched so risk is low.
 
-## Tests
+## Remaining references
 
-Full suite was **not re-run** solely for this audit because **no code or product files were deleted or modified**.  
+Mentions of “OpenCode” in HEX stage docs remain as **external UX reference** only, not Expert Skill package content.
 
-Prior baseline on this branch: **97 passed** (v1.5.1 minimal TUI commit).
+## Git
 
-If a full suite is required after any future cleanup, run:
-
-```bash
-pip install -e ".[dev]"
-pytest -q
-```
-
-## Git actions
-
-- **Commit:** documentation-only report of the audit (no destructive cleanup).
-- Message: `chore: remove accidentally uploaded OpenCode Expert Skill` is **not accurate** for a no-op deletion; this report uses an audit-oriented commit message instead so history stays truthful.
-- Force-push: **not used**.
-
-## Conclusion
-
-Safe cleanup policy: **preserve the project when the Skill is absent**.
-
-If the Expert Skill was uploaded to a **different clone, branch, or machine path**, provide that path or branch name for a second audit. This repository’s `main` at the inspected HEAD does not contain it.
+- Cleanup commit message: `chore: remove accidentally uploaded OpenCode Expert Skill`
+- No force-push; no history rewrite of prior commits.

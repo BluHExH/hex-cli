@@ -10,11 +10,26 @@ class ConversationTimeline(RichLog):
         super().__init__(id="timeline", markup=True, wrap=True, highlight=True, max_lines=6000)
 
     def show_welcome(self, model: str) -> None:
-        self.write("╭────────────────────────────────────────────────────────────╮")
-        self.write("│  [bold #c4b5fd]✦  Welcome to HEX[/]                                      │")
-        self.write("│  [dim]Your AI coding agent, right in your terminal.[/]           │")
-        self.write(f"│  [dim]                                          [/][green]●[/] {model[:20]:<20} │")
-        self.write("╰────────────────────────────────────────────────────────────╯")
+        # Reference: violet gradient card, left sparkle title, right model pill.
+        # Terminals cannot blend gradients — solid violet-tinted card is used instead.
+        W = 60
+        border = "[bold #6d5ae0]"
+        bg = "[on #161129]"
+        plain_reset = "[/]"
+
+        def row(left: str, right: str = "", *, dim: bool = False) -> str:
+            body = f"{left}{' ' * (W - 4 - len(left) - len(right))}{right}"
+            style = "[dim on #161129]" if dim else "[on #161129]"
+            return f"{border}│{plain_reset}{style} {body} {plain_reset}{border}│{plain_reset}"
+
+        title, pill = "✦  Welcome to HEX", f"● {model[:22]}"
+        if len(title) + len(pill) + 4 > W:
+            pill = f"● {model[:14]}"
+        self.write(f"{border}╭{'─' * W}╮{plain_reset}")
+        self.write(row(title, pill))
+        self.write(row("Your AI coding agent, right in your terminal.", dim=True))
+        self.write(row("", dim=True))
+        self.write(f"{border}╰{'─' * W}╯{plain_reset}")
         self.write("")
 
     def add_user(self, text: str, time_label: str = "") -> None:

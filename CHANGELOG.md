@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.1.3 — Reference fidelity hardening
+
+- Header renders real git state: branch chip `⎇ <branch> <count>` bound to the app workspace (cwd fix)
+- Fixed top header + status bar never rendering (border-box left zero content rows)
+- Real per-tool durations in tool cards and Tools Activity (monotonic timing in runner)
+- Mock provider multi-turn fix: summarize only after the tool result of the current exchange
+- Windows-safe 12h clocks (`%I:%M %p`), one-decimal context meter, composer toolbar chips, violet context bar
+- New bindings: Ctrl+K palette, Ctrl+Enter submit
+- Regenerated reference SVGs incl. changes rail with real `+delta` rows
+- Capture script spins a real git repo for genuine header data
+
 ## 2.1.2 — Reference workspace visual match
 
 - Tighten three-column proportions, header/status, tool cards, composer toolbar

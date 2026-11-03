@@ -1,4 +1,4 @@
-# HEX CLI 2.1.2
+# HEX CLI 2.1.3
 
 Native **terminal** AI coding agent for software development.
 
@@ -94,8 +94,8 @@ See `docs/ARCHITECTURE.md`.
 
 ## Version
 
-**2.1.2** — packaging, docs, shell safety, cancellation, TUI workers
+**2.1.3** — reference fidelity hardening: live git branch chip, real tool durations, header/status render fix, multi-turn mock fix
 
 ## TUI (2.1)
 
-Professional layout with header, sidebar, home screen, conversation timeline, multiline composer (Ctrl+Enter), status bar, and Ctrl+P command palette. See `docs/HEX_CLI_2.1.2_UI_REDESIGN.md`.
+Professional layout with header, sidebar, home screen, conversation timeline, multiline composer (Ctrl+Enter), status bar, and Ctrl+P/Ctrl+K command palette. See `docs/HEX_CLI_2.1.2_UI_REDESIGN.md` and `docs/HEX_CLI_2.1.3_REFERENCE_FIDELITY.md`.

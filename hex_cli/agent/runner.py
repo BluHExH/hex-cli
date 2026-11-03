@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
@@ -87,6 +88,7 @@ class AgentRunner:
                             target = Path(self.settings.workspace) / path
                             if target.is_file():
                                 before = target.read_text(encoding="utf-8", errors="replace")
+                        t0 = time.monotonic()
                         result = self.tools.execute(call.name, call.arguments)
                         if call.name == "write_file" and result.ok:
                             self.changes.record_write(
@@ -94,12 +96,14 @@ class AgentRunner:
                                 before,
                                 str(call.arguments.get("content", "")),
                             )
+                        duration = time.monotonic() - t0
                         events.append(
                             {
                                 "tool": call.name,
                                 "ok": result.ok,
                                 "output": result.output,
                                 "error": result.error,
+                                "duration": duration,
                             }
                         )
                         messages.append(

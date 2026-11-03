@@ -11,8 +11,8 @@ class StatusBar(Static):
 
     def set_status(self, *, ready: bool, model: str, workspace: str) -> None:
         state = "[green]●[/] Ready" if ready else "[yellow]●[/] Working"
-        path = workspace if len(workspace) < 36 else "…" + workspace[-34:]
+        path = workspace if len(workspace) < 34 else "…" + workspace[-32:]
         self.update(
-            f"[bold #a78bfa]◆ HEX[/]   {state}   [green]●[/] {model}   [dim]{path}[/]"
-            f"          [dim]Ctrl+P Palette  Ctrl+B Sidebar  Enter Submit  Esc Cancel[/]"
+            f"[bold #a78bfa]⬡ HEX[/]   {state}   [green]●[/] {model}   [dim]⌂[/] [dim]{path}[/]"
+            f"        [dim]Ctrl+K Command Palette   Ctrl+L Sidebar   Ctrl+Enter Submit   Esc Cancel[/]"
         )

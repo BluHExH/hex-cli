@@ -18,8 +18,8 @@ class MockProvider:
 
     def complete(self, messages: list[ChatMessage], tools: list[dict[str, Any]] | None = None) -> ProviderResponse:
         last = next((m.content for m in reversed(messages) if m.role == "user"), "")
-        # After tools, always summarize (do not re-issue the same tool call)
-        if any(m.role == "tool" for m in messages):
+        # After tools in the current exchange, summarize (do not re-issue the same tool call)
+        if messages and messages[-1].role == "tool":
             tool_bits = [m.content[:500] for m in messages if m.role == "tool"]
             return ProviderResponse(content="Tool results:\n" + "\n".join(tool_bits))
         # Simple scripted tool use

@@ -31,7 +31,7 @@ Screen {
 /* ===== TOP HEADER (full width, single row) ===== */
 #top-header {
     dock: top;
-    height: 1;
+    height: 2;
     background: #080a0f;
     color: $muted;
     padding: 0 1;
@@ -124,7 +124,7 @@ Screen {
 /* ===== Bottom app status ===== */
 #bottom-status {
     dock: bottom;
-    height: 1;
+    height: 2;
     background: #07090d;
     color: $muted;
     padding: 0 1;

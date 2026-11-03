@@ -21,9 +21,15 @@ class PromptComposer(Vertical):
     def compose(self) -> ComposeResult:
         yield Input(placeholder="Ask anything…", id="composer-box")
         yield Static(
-            "[dim]+ Add Context[/]    [dim]{ } Tools ▾[/]    [green]●[/] [dim]Auto[/]"
-            "                              [bold]↵ Enter ▸[/]",
+            self._toolbar("[yellow]⬤[/] [dim]Auto[/]"),
             id="composer-toolbar",
+        )
+
+    @staticmethod
+    def _toolbar(chip: str) -> str:
+        return (
+            "[dim]+ Add Context[/]    [dim]{ } Tools ▾[/]    "
+            f"{chip}                    [bold #8b7cf7]↵ Enter ▸[/]"
         )
 
     def on_mount(self) -> None:
@@ -37,14 +43,11 @@ class PromptComposer(Vertical):
 
     def set_permission_label(self, mode: str) -> None:
         chip = {
-            "allow": "[green]●[/] [dim]Auto[/]",
-            "deny": "[red]●[/] [dim]Deny[/]",
-            "prompt": "[yellow]●[/] [dim]Prompt[/]",
+            "allow": "[green]⬤[/] [dim]Auto[/]",
+            "deny": "[red]⬤[/] [dim]Deny[/]",
+            "prompt": "[yellow]⬤[/] [dim]Prompt[/]",
         }.get(mode, mode)
-        self.query_one("#composer-toolbar", Static).update(
-            f"[dim]+ Add Context[/]    [dim]{{ }} Tools ▾[/]    {chip}"
-            "                              [bold]↵ Enter ▸[/]"
-        )
+        self.query_one("#composer-toolbar", Static).update(self._toolbar(chip))
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id != "composer-box" or self._busy:

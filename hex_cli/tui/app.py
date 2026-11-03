@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from datetime import datetime
 from pathlib import Path
 
@@ -38,6 +39,8 @@ class HexApp(App[None]):
         Binding("ctrl+b", "toggle_left", "Left", show=True),
         Binding("ctrl+l", "toggle_right", "Right", show=True),
         Binding("ctrl+p", "palette", "Palette", show=True),
+        Binding("ctrl+k", "palette", "Palette", show=False),
+        Binding("ctrl+enter", "submit_current", "Submit", show=False),
         Binding("ctrl+q", "quit", "Quit", show=True),
         Binding("escape", "cancel_or_idle", "Cancel", show=True),
     ]
@@ -59,6 +62,27 @@ class HexApp(App[None]):
         self._started = datetime.now()
         self._activities: list[tuple[str, str, bool]] = []
         self._ctx_chars = 0
+        self.branch, self.commits = self._git_info()
+
+    def _git_info(self) -> tuple[str, int]:
+        """Read-only git metadata for the header chip; never mutates the repo."""
+        try:
+            branch = subprocess.run(
+                ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+                cwd=str(self.workspace),
+                capture_output=True, text=True, timeout=5, check=True,
+            ).stdout.strip()
+            commits = int(
+                subprocess.run(
+                    ["git", "rev-list", "--count", "HEAD"],
+                    cwd=str(self.workspace),
+                    capture_output=True, text=True, timeout=5, check=True,
+                ).stdout.strip()
+                or 0
+            )
+        except (OSError, subprocess.SubprocessError, ValueError):
+            return "", 0
+        return branch, commits
 
     def compose(self) -> ComposeResult:
         yield AppHeader()
@@ -126,6 +150,8 @@ class HexApp(App[None]):
             model=self.settings.model,
             provider=self.settings.provider,
             agent_status="Working" if self._busy else "Agent",
+            branch=self.branch,
+            commits=self.commits,
         )
         self.query_one(LeftRail).set_data(
             workspace=str(self.workspace),
@@ -141,8 +167,8 @@ class HexApp(App[None]):
             changes=self._change_rows(),
             activities=list(self._activities[-12:]),
             model=model,
-            context_line=f"{self._ctx_chars // 1000}K / {self.settings.context_max_chars // 1000}K",
-            started=self._started.strftime("%H:%M"),
+            context_line=f"{self._ctx_chars / 1000:.1f}K / {self.settings.context_max_chars / 1000:.0f}K",
+            started=self._started.strftime("%I:%M %p").lstrip("0"),
             duration=f"{mins}m {secs}s",
             auto_save=True,
         )
@@ -198,15 +224,20 @@ class HexApp(App[None]):
             self.runner.request_cancel()
             self.query_one(ConversationTimeline).add_system("Cancel requested…")
 
+    def action_submit_current(self) -> None:
+        """Ctrl+Enter submit (Enter also submits; some terminals cannot send Ctrl+Enter)."""
+        box = self.query_one(PromptComposer)
+        field = box.query_one("#composer-box", object)
+        text = getattr(field, "value", "").strip()
+        if text:
+            field.value = ""
+            box.post_message(PromptComposer.Submitted(text))
+
     def on_prompt_composer_submitted(self, event: PromptComposer.Submitted) -> None:
         text = event.text.strip()
         if not text or self._busy:
             return
-        now = datetime.now().strftime("%-I:%M %p") if hasattr(datetime, "strftime") else ""
-        try:
-            now = datetime.now().strftime("%H:%M")
-        except Exception:
-            now = ""
+        now = datetime.now().strftime("%I:%M %p").lstrip("0")
         tl = self.query_one(ConversationTimeline)
         tl.add_user(text, now)
         self._busy = True
@@ -229,6 +260,8 @@ class HexApp(App[None]):
             name = ev["tool"]
             ok = bool(ev["ok"])
             detail = (ev.get("output") or ev.get("error") or "")[:400]
+            dur = ev.get("duration")
+            dur_label = f"{dur:.1f}s" if isinstance(dur, (int, float)) else ""
             kind = {
                 "read_file": "Read",
                 "write_file": "Edit",
@@ -236,8 +269,8 @@ class HexApp(App[None]):
                 "list_dir": "List",
                 "search_files": "Search",
             }.get(name, name)
-            self._activities.append((kind, "done" if ok else "err", ok))
-            tl.add_tool_card(kind, name, ok, preview=detail)
+            self._activities.append((kind, dur_label if ok else "failed", ok))
+            tl.add_tool_card(kind, name, ok, duration=dur_label, preview=detail)
         now = datetime.now().strftime("%H:%M")
         if result.tool_events and not result.cancelled:
             tl.add_planning(len(result.tool_events), "Tool steps completed.")

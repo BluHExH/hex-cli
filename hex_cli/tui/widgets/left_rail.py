@@ -30,7 +30,7 @@ class LeftRail(VerticalScroll):
         used_k = f"{context_chars / 1000:.1f}K"
         max_k = f"{max_c / 1000:.0f}K"
         filled = max(0, min(12, round(pct / 100 * 12)))
-        bar = "[green]" + "━" * filled + "[/][dim]" + "━" * (12 - filled) + "[/]"
+        bar = "[#7c6cf0]" + "━" * filled + "[/][dim]" + "━" * (12 - filled) + "[/]"
         files = recent_files or []
         fl = "\n".join(f"[dim]  📄 [/]{f}" for f in files[:5]) or "[dim]  —[/]"
         if permission_mode == "allow":
@@ -45,7 +45,7 @@ class LeftRail(VerticalScroll):
                 [
                     "[bold]Session[/]                    [dim]↦[/]",
                     "[dim]  ⧉[/] New Session           [dim]Ctrl+N[/]",
-                    "[dim]  ⇄[/] Switch Session        [dim]Ctrl+O[/]",
+                    "[dim]  ⇄[/] Switch Session        [dim]Ctrl+⇧+S[/]",
                     "[dim]  ☰[/] Manage Sessions",
                     "",
                     "[bold]Workspace[/]                 [dim]▾[/]",

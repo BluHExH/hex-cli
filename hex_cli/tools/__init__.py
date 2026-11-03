@@ -1,7 +1,5 @@
-"""Agent tools for filesystem, commands, and git."""
+from hex_cli.tools.registry import ToolRegistry, ToolResult
+from hex_cli.tools.filesystem import FileTools
+from hex_cli.tools.shell import ShellTool
 
-from hex_cli.tools.filesystem import FileSystemTools
-from hex_cli.tools.commands import CommandTools
-from hex_cli.tools.git_tools import GitTools
-
-__all__ = ["FileSystemTools", "CommandTools", "GitTools"]
+__all__ = ["ToolRegistry", "ToolResult", "FileTools", "ShellTool"]

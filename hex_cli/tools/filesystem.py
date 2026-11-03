@@ -1,487 +1,59 @@
-"""Safe filesystem tools constrained to the project root."""
-
 from __future__ import annotations
 
-import difflib
 import re
 from pathlib import Path
 from typing import Any
 
-from hex_cli.config import AppConfig
-from hex_cli.permissions import ActionType, PermissionManager
-
-# Directories we never recurse into
-SKIP_DIRS = {
-    ".git",
-    "node_modules",
-    "__pycache__",
-    ".venv",
-    "venv",
-    "env",
-    ".env",
-    "dist",
-    "build",
-    ".tox",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".ruff_cache",
-    "target",
-    "vendor",
-    ".next",
-    "coverage",
-    ".idea",
-    ".vscode",
-}
+from hex_cli.tools.paths import PathGuard
 
 
-class FileSystemTools:
-    def __init__(
-        self,
-        project_root: Path,
-        permissions: PermissionManager,
-        config: AppConfig,
-    ):
-        self.root = project_root.resolve()
-        self.perms = permissions
-        self.config = config
+class FileTools:
+    def __init__(self, root: Path) -> None:
+        self.guard = PathGuard(root)
+        self.root = root.resolve()
 
-    # ------------------------------------------------------------------
-    # list_files
-    # ------------------------------------------------------------------
+    def read_file(self, path: str, max_chars: int = 80_000) -> str:
+        p = self.guard.resolve(path)
+        if not p.is_file():
+            raise FileNotFoundError(path)
+        text = p.read_text(encoding="utf-8", errors="replace")
+        if len(text) > max_chars:
+            return text[:max_chars] + f"\n\n… truncated ({len(text)} chars total)"
+        return text
 
-    def list_files(self, path: str = ".", recursive: bool = False) -> dict[str, Any]:
-        try:
-            target = self.perms.resolve_safe_path(path)
-        except PermissionError as e:
-            return {"ok": False, "error": str(e)}
+    def write_file(self, path: str, content: str) -> str:
+        p = self.guard.resolve(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        return f"wrote {p.relative_to(self.root)} ({len(content)} chars)"
 
-        if not target.exists():
-            return {"ok": False, "error": f"Path does not exist: {path}"}
-        if not target.is_dir():
-            return {"ok": False, "error": f"Not a directory: {path}"}
+    def list_dir(self, path: str = ".") -> str:
+        p = self.guard.resolve(path)
+        if not p.is_dir():
+            raise NotADirectoryError(path)
+        entries = sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+        lines = []
+        for e in entries[:500]:
+            kind = "dir" if e.is_dir() else "file"
+            lines.append(f"{kind}\t{e.relative_to(self.root)}")
+        return "\n".join(lines) or "(empty)"
 
-        entries: list[str] = []
-        if recursive:
-            for p in sorted(target.rglob("*")):
-                if any(part in SKIP_DIRS for part in p.parts):
-                    continue
-                try:
-                    rel = p.relative_to(self.root).as_posix()
-                except ValueError:
-                    continue
-                kind = "dir" if p.is_dir() else "file"
-                entries.append(f"{kind}: {rel}")
-                if len(entries) >= 500:
-                    entries.append("… (truncated)")
-                    break
-        else:
-            for p in sorted(target.iterdir()):
-                if p.name in SKIP_DIRS:
-                    continue
-                kind = "dir" if p.is_dir() else "file"
-                rel = p.relative_to(self.root).as_posix()
-                entries.append(f"{kind}: {rel}")
-
-        return {"ok": True, "path": path, "entries": entries, "count": len(entries)}
-
-    # ------------------------------------------------------------------
-    # read_file
-    # ------------------------------------------------------------------
-
-    def read_file(
-        self,
-        path: str,
-        offset: int | None = None,
-        limit: int | None = None,
-    ) -> dict[str, Any]:
-        result = self.perms.check(
-            ActionType.READ_FILE,
-            f"Read file {path}",
-            path=path,
-        )
-        if not result.allowed:
-            return {"ok": False, "error": result.reason}
-
-        try:
-            target = self.perms.resolve_safe_path(path)
-        except PermissionError as e:
-            return {"ok": False, "error": str(e)}
-
-        if not target.exists():
-            return {"ok": False, "error": f"File not found: {path}"}
-        if not target.is_file():
-            return {"ok": False, "error": f"Not a file: {path}"}
-
-        size = target.stat().st_size
-        if size > self.config.max_file_size_bytes:
-            return {
-                "ok": False,
-                "error": f"File too large ({size} bytes). Limit is {self.config.max_file_size_bytes}.",
-            }
-
-        try:
-            text = target.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            return {"ok": False, "error": f"Binary or non-UTF-8 file: {path}"}
-
-        lines = text.splitlines(keepends=True)
-        total = len(lines)
-        start = 0
-        if offset is not None and offset > 0:
-            start = offset - 1
-        end = total
-        if limit is not None and limit > 0:
-            end = min(start + limit, total)
-
-        sliced = lines[start:end]
-        numbered = []
-        for i, line in enumerate(sliced, start=start + 1):
-            numbered.append(f"{i:6}|{line.rstrip(chr(10) + chr(13))}")
-
-        return {
-            "ok": True,
-            "path": path,
-            "total_lines": total,
-            "start_line": start + 1,
-            "end_line": start + len(sliced),
-            "content": "\n".join(numbered),
-        }
-
-    # ------------------------------------------------------------------
-    # search_text
-    # ------------------------------------------------------------------
-
-    def search_text(
-        self,
-        pattern: str,
-        path: str = ".",
-        max_results: int = 30,
-    ) -> dict[str, Any]:
-        try:
-            target = self.perms.resolve_safe_path(path)
-        except PermissionError as e:
-            return {"ok": False, "error": str(e)}
-
-        try:
-            regex = re.compile(pattern)
-        except re.error:
-            # Fall back to literal search
-            regex = re.compile(re.escape(pattern))
-
-        matches: list[dict[str, Any]] = []
-        files_searched = 0
-
-        def _search_file(fp: Path) -> None:
-            nonlocal files_searched
-            if files_searched > 2000 or len(matches) >= max_results:
-                return
-            if fp.stat().st_size > self.config.max_file_size_bytes:
-                return
+    def search_files(self, pattern: str, path: str = ".", max_hits: int = 50) -> str:
+        base = self.guard.resolve(path)
+        rx = re.compile(pattern)
+        hits: list[str] = []
+        for p in base.rglob("*"):
+            if not p.is_file():
+                continue
+            if any(part.startswith(".") for part in p.parts):
+                continue
             try:
-                text = fp.read_text(encoding="utf-8", errors="ignore")
-            except Exception:
-                return
-            files_searched += 1
-            for i, line in enumerate(text.splitlines(), 1):
-                if regex.search(line):
-                    rel = fp.relative_to(self.root).as_posix()
-                    matches.append({"file": rel, "line": i, "text": line.strip()[:200]})
-                    if len(matches) >= max_results:
-                        return
-
-        if target.is_file():
-            _search_file(target)
-        else:
-            for p in target.rglob("*"):
-                if any(part in SKIP_DIRS for part in p.parts):
-                    continue
-                if p.is_file():
-                    _search_file(p)
-                if len(matches) >= max_results:
-                    break
-
-        return {
-            "ok": True,
-            "pattern": pattern,
-            "matches": matches,
-            "count": len(matches),
-            "files_searched": files_searched,
-        }
-
-    # ------------------------------------------------------------------
-    # write_file
-    # ------------------------------------------------------------------
-
-    def write_file(self, path: str, content: str) -> dict[str, Any]:
-        try:
-            target = self.perms.resolve_safe_path(path)
-        except PermissionError as e:
-            return {"ok": False, "error": str(e)}
-
-        exists = target.exists()
-        original = None
-        if exists:
-            try:
-                original = target.read_text(encoding="utf-8", errors="replace")
+                text = p.read_text(encoding="utf-8", errors="ignore")
             except OSError:
-                original = None
-        action = ActionType.MODIFY_FILE if exists else ActionType.CREATE_FILE
-        desc = f"{'Overwrite' if exists else 'Create'} file {path}"
-
-        preview = content if len(content) < 2000 else content[:2000] + "\n… (truncated)"
-        result = self.perms.check(
-            action,
-            desc,
-            path=path,
-            detail=preview,
-        )
-        if not result.allowed:
-            return {"ok": False, "error": result.reason, "skipped": True}
-
-        try:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            # Simple backup for overwrites
-            if exists and target.is_file():
-                backup = target.with_suffix(target.suffix + ".hexbak")
-                backup.write_bytes(target.read_bytes())
-            target.write_text(content, encoding="utf-8")
-        except OSError as e:
-            return {"ok": False, "error": f"Write failed: {e}"}
-
-        return {
-            "ok": True,
-            "path": path,
-            "bytes_written": len(content.encode("utf-8")),
-            "created": not exists,
-            "action": "create" if not exists else "modify",
-            "before": original,
-            "after": content,
-            "content": content,
-        }
-
-    # ------------------------------------------------------------------
-    # edit_file
-    # ------------------------------------------------------------------
-
-    def edit_file(
-        self,
-        path: str,
-        old_string: str,
-        new_string: str,
-        replace_all: bool = False,
-    ) -> dict[str, Any]:
-        try:
-            target = self.perms.resolve_safe_path(path)
-        except PermissionError as e:
-            return {"ok": False, "error": str(e)}
-
-        if not target.exists() or not target.is_file():
-            return {"ok": False, "error": f"File not found: {path}"}
-
-        try:
-            original = target.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            return {"ok": False, "error": f"Binary or non-UTF-8 file: {path}"}
-
-        count = original.count(old_string)
-        if count == 0:
-            return {"ok": False, "error": "old_string not found in file"}
-        if count > 1 and not replace_all:
-            return {
-                "ok": False,
-                "error": f"old_string found {count} times; set replace_all=true or provide a unique string",
-            }
-
-        if replace_all:
-            updated = original.replace(old_string, new_string)
-        else:
-            updated = original.replace(old_string, new_string, 1)
-
-        # Build a short unified diff for the permission prompt
-        diff_lines = list(
-            difflib.unified_diff(
-                original.splitlines(keepends=True),
-                updated.splitlines(keepends=True),
-                fromfile=f"a/{path}",
-                tofile=f"b/{path}",
-                n=3,
-            )
-        )
-        diff_text = "".join(diff_lines)
-        if len(diff_text) > 3000:
-            diff_text = diff_text[:3000] + "\n… (diff truncated)"
-
-        result = self.perms.check(
-            ActionType.MODIFY_FILE,
-            f"Edit file {path}",
-            path=path,
-            detail=diff_text,
-        )
-        if not result.allowed:
-            return {"ok": False, "error": result.reason, "skipped": True}
-
-        try:
-            backup = target.with_suffix(target.suffix + ".hexbak")
-            backup.write_text(original, encoding="utf-8")
-            target.write_text(updated, encoding="utf-8")
-        except OSError as e:
-            return {"ok": False, "error": f"Write failed: {e}"}
-
-        return {
-            "ok": True,
-            "path": path,
-            "replacements": count if replace_all else 1,
-            "diff": diff_text,
-            "action": "modify",
-            "before": original,
-            "after": updated,
-        }
-
-    # ------------------------------------------------------------------
-    # create_directory
-    # ------------------------------------------------------------------
-
-    def create_directory(self, path: str) -> dict[str, Any]:
-        try:
-            target = self.perms.resolve_safe_path(path)
-        except PermissionError as e:
-            return {"ok": False, "error": str(e)}
-
-        if target.exists():
-            return {"ok": True, "path": path, "already_exists": True}
-
-        result = self.perms.check(
-            ActionType.CREATE_DIRECTORY,
-            f"Create directory {path}",
-            path=path,
-        )
-        if not result.allowed:
-            return {"ok": False, "error": result.reason, "skipped": True}
-
-        try:
-            target.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            return {"ok": False, "error": str(e)}
-
-        return {"ok": True, "path": path, "created": True}
-
-    def glob(self, pattern: str, path: str = ".", max_results: int = 100) -> dict[str, Any]:
-        """Find files matching a glob pattern relative to path."""
-        if not pattern or not str(pattern).strip():
-            return {"ok": False, "error": "pattern is required"}
-        try:
-            base = self.perms.resolve_safe_path(path)
-        except PermissionError as e:
-            return {"ok": False, "error": str(e)}
-        if not base.exists():
-            return {"ok": False, "error": f"Path does not exist: {path}"}
-        matches: list[str] = []
-        try:
-            for p in sorted(base.glob(pattern)):
-                if any(part in SKIP_DIRS for part in p.parts):
-                    continue
-                try:
-                    rel = p.relative_to(self.root).as_posix()
-                except ValueError:
-                    continue
-                matches.append(rel)
-                if len(matches) >= max_results:
-                    break
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
-        return {
-            "ok": True,
-            "pattern": pattern,
-            "matches": matches,
-            "count": len(matches),
-            "truncated": len(matches) >= max_results,
-        }
-
-    def apply_patch(self, path: str, patch: str) -> dict[str, Any]:
-        """Apply a best-effort unified diff or full-content replacement.
-
-        Prefer edit_file for precise edits. This tool requires modify permission.
-        """
-        from hex_cli.permissions import ActionType
-
-        if not path:
-            return {"ok": False, "error": "path is required"}
-        if patch is None or patch == "":
-            return {"ok": False, "error": "patch is required"}
-        try:
-            target = self.perms.resolve_safe_path(path)
-        except PermissionError as e:
-            return {"ok": False, "error": str(e)}
-        if not target.is_file():
-            return {"ok": False, "error": f"Not a file: {path}"}
-
-        try:
-            before = target.read_text(encoding="utf-8", errors="replace")
-        except OSError as e:
-            return {"ok": False, "error": str(e)}
-
-        body = [
-            ln
-            for ln in patch.splitlines()
-            if not ln.startswith("---")
-            and not ln.startswith("+++")
-            and not ln.startswith("@@")
-        ]
-        looks_unified = any(ln[:1] in {"+", "-", " "} for ln in body if ln)
-
-        if not looks_unified:
-            after = patch
-        else:
-            orig = before.splitlines(keepends=True)
-            out: list[str] = []
-            oi = 0
-            try:
-                for pl in body:
-                    if not pl and pl != "":
-                        continue
-                    tag = pl[:1] if pl else ""
-                    content = pl[1:] if tag in {"+", "-", " "} else pl
-                    if tag == " ":
-                        if oi < len(orig):
-                            out.append(orig[oi])
-                            oi += 1
-                        else:
-                            out.append(content + ("\n" if not content.endswith("\n") else ""))
-                    elif tag == "-":
-                        if oi < len(orig):
-                            oi += 1
-                    elif tag == "+":
-                        if not content.endswith("\n"):
-                            content = content + "\n"
-                        out.append(content)
-                if oi < len(orig):
-                    out.extend(orig[oi:])
-                after = "".join(out)
-            except Exception as e:
-                return {"ok": False, "error": f"Patch apply failed: {e}"}
-
-        # Fix accidental double-escaped newlines from generation
-        after = after.replace("\\n", "\n") if "\\n" in after else after
-
-        result = self.perms.check(
-            ActionType.MODIFY_FILE,
-            description=f"Apply patch to {path}",
-            path=path,
-            detail=after[:800],
-        )
-        if not result.allowed:
-            return {"ok": False, "skipped": True, "error": result.reason or "denied"}
-
-        try:
-            target.write_text(after, encoding="utf-8")
-        except OSError as e:
-            return {"ok": False, "error": str(e)}
-
-        return {
-            "ok": True,
-            "path": path,
-            "action": "modify",
-            "bytes": len(after.encode("utf-8")),
-            "before": before,
-            "after": after,
-        }
+                continue
+            for i, line in enumerate(text.splitlines(), 1):
+                if rx.search(line):
+                    hits.append(f"{p.relative_to(self.root)}:{i}:{line[:200]}")
+                    if len(hits) >= max_hits:
+                        return "\n".join(hits)
+        return "\n".join(hits) or "(no matches)"

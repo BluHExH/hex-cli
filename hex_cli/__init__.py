@@ -1,4 +1,4 @@
-"""HEX CLI — An AI coding agent for software development."""
+"""HEX CLI — native terminal AI coding agent."""
 
-__version__ = "1.5.1"
+__version__ = "2.0.0"
 __app_name__ = "hex"

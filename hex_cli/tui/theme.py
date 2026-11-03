@@ -1,108 +1,116 @@
-"""HEX TUI theme — dark workspace matching professional coding-agent density."""
+"""Exact-structure theme derived from the reference workspace screenshot.
+
+Terminal/Textual cannot render true gradients or anti-aliased avatars; colors,
+column ratios, and hierarchy follow the reference as closely as possible.
+"""
 
 HEX_THEME_CSS = """
-$bg: #0c0f14;
-$panel: #10151c;
-$panel-2: #141a22;
-$border: #1c2430;
-$border-soft: #243041;
-$text: #e8eef7;
-$muted: #8b9bb0;
-$accent: #8b7cf7;
-$accent-2: #5b8def;
-$user: #9ecbff;
-$ok: #3ecf8e;
-$warn: #e6b84d;
-$err: #f07178;
-$chip: #1a2230;
+/* Reference palette (sampled from dark OpenCode-style workspace) */
+$bg: #0b0e14;
+$bg-elev: #0f131a;
+$panel: #0e1219;
+$panel-2: #12171f;
+$border: #1a2230;
+$border-hi: #2a3548;
+$text: #e6edf5;
+$muted: #7d8da6;
+$faint: #5c6b82;
+$accent: #7c6cf0;
+$accent-soft: #5b8def;
+$user: #a8c7fa;
+$ok: #3dd68c;
+$warn: #e6c07b;
+$chip: #151b26;
 
-Screen { background: $bg; color: $text; }
+Screen {
+    background: $bg;
+    color: $text;
+    layout: vertical;
+}
 
-/* —— Header —— */
+/* ===== TOP HEADER (full width, single row) ===== */
 #top-header {
     dock: top;
     height: 1;
-    background: #0a0d12;
+    background: #080a0f;
     color: $muted;
     padding: 0 1;
     border-bottom: solid $border;
 }
 
-/* —— Body three columns —— */
+/* ===== MAIN BODY: 3 columns ===== */
 #body {
     height: 1fr;
+    layout: horizontal;
 }
 
+/* Left ~22 chars content + padding ≈ reference left rail proportion */
 #left-rail {
-    width: 26;
+    width: 28;
     background: $panel;
     border-right: solid $border;
-    padding: 1 1;
+    padding: 1 1 0 1;
+    scrollbar-size: 1 1;
 }
 
 #center {
     width: 1fr;
     background: $bg;
+    layout: vertical;
 }
 
+/* Right rail similar width to left */
 #right-rail {
-    width: 30;
+    width: 32;
     background: $panel;
     border-left: solid $border;
-    padding: 1 1;
+    padding: 1 1 0 1;
+    scrollbar-size: 1 1;
 }
 
 #left-rail.collapsed, #right-rail.collapsed {
     width: 0;
+    min-width: 0;
     padding: 0;
     border: none;
 }
 
-.rail-title {
-    color: $accent;
-    text-style: bold;
-    margin-bottom: 0;
-}
-
-.rail-muted { color: $muted; }
-.rail-item { color: $text; }
-.rail-ok { color: $ok; }
-
-/* —— Session tabs —— */
+/* ===== Session tab strip ===== */
 #session-tabs {
     height: 1;
-    background: $panel-2;
+    background: $bg-elev;
     border-bottom: solid $border;
     padding: 0 1;
     color: $muted;
 }
 
-/* —— Timeline —— */
+/* ===== Conversation ===== */
 #timeline {
     height: 1fr;
+    background: $bg;
     padding: 1 2;
     scrollbar-background: $bg;
-    scrollbar-color: $border-soft;
+    scrollbar-color: $border-hi;
 }
 
-/* —— Composer —— */
+/* ===== Composer block (bottom of center) ===== */
 #composer-dock {
-    height: auto;
-    min-height: 5;
-    max-height: 10;
-    background: $panel-2;
+    height: 6;
+    background: $bg-elev;
     border-top: solid $border;
-    padding: 0 1 1 1;
+    padding: 1 2;
+    layout: vertical;
 }
 
 #composer-box {
     height: 3;
     background: $chip;
-    border: solid $border-soft;
+    border: solid $border-hi;
     padding: 0 1;
+    color: $text;
 }
 
-#composer-box:focus-within {
+#composer-box:focus {
     border: solid $accent;
 }
 
@@ -110,31 +118,21 @@ Screen { background: $bg; color: $text; }
     height: 1;
     color: $muted;
     padding: 0 1;
+    margin-top: 0;
 }
 
-/* —— Status —— */
+/* ===== Bottom app status ===== */
 #bottom-status {
     dock: bottom;
     height: 1;
-    background: #080a0e;
+    background: #07090d;
     color: $muted;
     padding: 0 1;
     border-top: solid $border;
 }
 
-/* —— Welcome card —— */
-.welcome-card {
-    background: $panel-2;
-    border: solid $border-soft;
-    padding: 1 2;
-    margin: 1 0;
-}
-
-/* —— Tool card —— */
-.tool-card {
-    background: $panel-2;
-    border-left: tall $accent-2;
-    padding: 0 1;
-    margin: 0 0 1 0;
-}
+/* utility */
+.muted { color: $muted; }
+.ok { color: $ok; }
+.accent { color: $accent; }
 """

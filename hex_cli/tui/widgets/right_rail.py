@@ -5,14 +5,14 @@ from textual.widgets import Static
 
 
 class RightRail(VerticalScroll):
-    """Right panel: changes, tool activity, session info."""
+    """Reference right column: Changes, Tools Activity, Session Info, Auto-save."""
 
     def __init__(self) -> None:
         super().__init__(id="right-rail")
         self._collapsed = False
 
     def compose(self):
-        yield Static("", id="right-body")
+        yield Static(id="right-body")
 
     def set_data(
         self,
@@ -28,27 +28,41 @@ class RightRail(VerticalScroll):
         ch = changes or []
         act = activities or []
         if ch:
-            ch_lines = "\n".join(f"  {path}  [green]{delta}[/]" for path, delta in ch[:12])
-            ch_hdr = f"Changes  {len(ch)} files"
+            hdr = f"[bold]Changes[/]  [dim]{len(ch)} files[/]            [dim]⋯[/]"
+            lines = []
+            for path, delta in ch[:10]:
+                color = "green" if str(delta).startswith("+") else "red"
+                lines.append(f"  [dim]📄[/] {path}  [{color}]{delta}[/]")
+            ch_block = "\n".join(lines)
         else:
-            ch_lines = "  [dim]No file changes[/]"
-            ch_hdr = "Changes"
+            hdr = "[bold]Changes[/]  [dim]0 files[/]"
+            ch_block = "  [dim]No changes yet[/]"
         if act:
             act_lines = "\n".join(
-                f"  [{'green' if ok else 'red'}]•[/] {name}  [dim]{meta}[/]" for name, meta, ok in act[:12]
+                f"  [{'green' if ok else 'red'}]●[/] {name}  [dim]{meta}[/]"
+                for name, meta, ok in act[:10]
             )
         else:
-            act_lines = "  [dim]No tool activity[/]"
-        body = self.query_one("#right-body", Static)
-        body.update(
-            f"[bold]{ch_hdr}[/]\n{ch_lines}\n\n"
-            f"[bold]Tools Activity[/]\n{act_lines}\n\n"
-            f"[bold]Session Info[/]\n"
-            f"  Model: {model}\n"
-            f"  Context: {context_line}\n"
-            f"  Started: {started or '—'}\n"
-            f"  Duration: {duration or '—'}\n\n"
-            f"  [{'green' if auto_save else 'yellow'}]•[/] Auto-save {'enabled' if auto_save else 'off'}"
+            act_lines = "  [dim]No activity[/]"
+        save = "[green]☑[/] Auto-save enabled" if auto_save else "[dim]☐ Auto-save off[/]"
+        self.query_one("#right-body", Static).update(
+            "\n".join(
+                [
+                    hdr,
+                    ch_block,
+                    "",
+                    "[bold]Tools Activity[/]              [dim]▾[/]",
+                    act_lines,
+                    "",
+                    "[bold]Session Info[/]                [dim]▾[/]",
+                    f"  [dim]▣[/] Model: {model}",
+                    f"  [dim]▤[/] Context: {context_line}",
+                    f"  [dim]◷[/] Started: {started or '—'}",
+                    f"  [dim]◷[/] Duration: {duration or '—'}",
+                    "",
+                    f"  {save}",
+                ]
+            )
         )
 
     def toggle(self) -> None:

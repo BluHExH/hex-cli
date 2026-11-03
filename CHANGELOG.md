@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.1.2 — Reference workspace visual match
+
+- Tighten three-column proportions, header/status, tool cards, composer toolbar
+- Left/right rails section order aligned to reference image
+- Visual match report + Textual grid screenshots
+
+# Changelog
+
 ## 2.1.1 — Three-column workspace TUI
 
 - Left / center / right layout matching professional coding-agent structure

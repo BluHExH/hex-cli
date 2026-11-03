@@ -152,7 +152,7 @@ class HexApp(App[None]):
             workspace=str(self.workspace),
         )
         tabs = self.query_one("#session-tabs", Static)
-        tabs.update(f"  [bold]{self.session.title or 'Session'}[/]  [dim]{self.session.id}[/]   +")
+        tabs.update(f"  [reverse] {self.session.title or 'Session 1'}  × [/]  [dim]+[/]")
 
     def action_new_session(self) -> None:
         if self._busy:

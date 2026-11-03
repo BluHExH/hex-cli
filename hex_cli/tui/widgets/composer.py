@@ -1,58 +1,56 @@
 from __future__ import annotations
 
+from textual.app import ComposeResult
+from textual.containers import Vertical, Horizontal
 from textual.message import Message
-from textual.widgets import TextArea
+from textual.widgets import Input, Static
 
 
-class PromptComposer(TextArea):
-    """Multi-line prompt composer with Enter-to-send (plain), Shift+Enter newline via soft wrap."""
+class PromptComposer(Vertical):
+    """Bottom composer with toolbar chips (structure matches reference)."""
 
     class Submitted(Message):
         def __init__(self, text: str) -> None:
             super().__init__()
             self.text = text
 
-    BINDINGS = [
-        ("ctrl+enter", "submit", "Send"),
-    ]
-
-    def __init__(self, **kwargs) -> None:
-        super().__init__(id="composer", soft_wrap=True, show_line_numbers=False, **kwargs)
-        self._history: list[str] = []
-        self._hist_idx = -1
+    def __init__(self) -> None:
+        super().__init__(id="composer-dock")
         self._busy = False
+        self._history: list[str] = []
+
+    def compose(self) -> ComposeResult:
+        yield Input(placeholder="Ask anything…", id="composer-box")
+        with Horizontal(id="composer-toolbar"):
+            yield Static("[dim]+ Context[/]   [dim]{ } Tools[/]   [green]•[/] [dim]permission[/]          [bold]Enter ↵[/]", id="composer-hints")
 
     def on_mount(self) -> None:
-        self.border_title = "Message"
-        self.border_subtitle = "Ctrl+Enter send"
+        self.query_one("#composer-box", Input).focus()
 
     def set_busy(self, busy: bool) -> None:
         self._busy = busy
-        self.disabled = busy
-        self.border_subtitle = "working…" if busy else "Ctrl+Enter send"
+        box = self.query_one("#composer-box", Input)
+        box.disabled = busy
+        box.placeholder = "Working…" if busy else "Ask anything…"
 
-    def action_submit(self) -> None:
-        if self._busy:
+    def set_permission_label(self, mode: str) -> None:
+        hints = self.query_one("#composer-hints", Static)
+        label = {
+            "allow": "[green]• Auto[/]",
+            "deny": "[red]• Deny[/]",
+            "prompt": "[yellow]• Prompt[/]",
+        }.get(mode, mode)
+        hints.update(f"[dim]+ Context[/]   [dim]{{ }} Tools[/]   {label}          [bold]Enter ↵[/]")
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id != "composer-box" or self._busy:
             return
-        text = self.text.strip()
+        text = event.value.strip()
+        event.input.value = ""
         if not text:
             return
         self._history.append(text)
-        self._hist_idx = len(self._history)
-        self.clear()
         self.post_message(self.Submitted(text))
 
-    def action_history_up(self) -> None:
-        if not self._history:
-            return
-        self._hist_idx = max(0, self._hist_idx - 1)
-        self.load_text(self._history[self._hist_idx])
-
-    def action_history_down(self) -> None:
-        if not self._history:
-            return
-        self._hist_idx = min(len(self._history), self._hist_idx + 1)
-        if self._hist_idx >= len(self._history):
-            self.clear()
-        else:
-            self.load_text(self._history[self._hist_idx])
+    def focus_input(self) -> None:
+        self.query_one("#composer-box", Input).focus()

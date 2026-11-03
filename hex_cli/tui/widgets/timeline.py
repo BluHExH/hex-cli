@@ -4,36 +4,47 @@ from textual.widgets import RichLog
 
 
 class ConversationTimeline(RichLog):
-    """Conversation stream with structured message styles."""
+    def __init__(self) -> None:
+        super().__init__(id="timeline", markup=True, wrap=True, highlight=True, max_lines=5000)
 
-    def __init__(self, **kwargs) -> None:
-        super().__init__(
-            id="timeline",
-            markup=True,
-            wrap=True,
-            highlight=True,
-            max_lines=4000,
-            **kwargs,
-        )
+    def show_welcome(self, model: str) -> None:
+        self.write("")
+        self.write("[bold #c4b5fd]✦  Welcome to HEX[/]")
+        self.write("[dim]Your AI coding agent, right in your terminal.[/]")
+        self.write(f"[dim]Model:[/] {model}")
+        self.write("")
 
-    def add_user(self, text: str) -> None:
-        self.write(f"[bold #7dd3fc]You[/]")
+    def add_user(self, text: str, time_label: str = "") -> None:
+        t = f"  [dim]{time_label}[/]" if time_label else ""
+        self.write(f"[bold #9ecbff]You[/]{t}")
         self.write(text)
         self.write("")
 
-    def add_assistant(self, text: str, *, cancelled: bool = False) -> None:
+    def add_assistant(self, text: str, time_label: str = "", cancelled: bool = False) -> None:
+        t = f"  [dim]{time_label}[/]" if time_label else ""
         label = "[bold #fbbf24]HEX[/] [dim]cancelled[/]" if cancelled else "[bold #a78bfa]HEX[/]"
-        self.write(label)
+        self.write(f"{label}{t}")
         self.write(text)
         self.write("")
 
-    def add_tool(self, name: str, ok: bool, detail: str = "") -> None:
-        status = "[green]ok[/]" if ok else "[red]err[/]"
-        self.write(f"[#fbbf24]▸ tool[/] [bold]{name}[/] {status}")
-        if detail:
-            clipped = detail if len(detail) <= 1200 else detail[:1200] + "\n…"
-            for line in clipped.splitlines()[:40]:
-                self.write(f"  [dim]{line}[/]")
+    def add_planning(self, steps: int, summary: str) -> None:
+        self.write(f"[green]✓[/] [bold]Planning[/] [dim]· {steps} steps[/]")
+        if summary:
+            self.write(f"[dim]{summary}[/]")
+        self.write("")
+
+    def add_tool_card(self, kind: str, target: str, ok: bool, duration: str = "", preview: str = "") -> None:
+        status = "[green]Completed[/]" if ok else "[red]Failed[/]"
+        dur = f" · {duration}" if duration else ""
+        self.write(f"┌─ [bold]{kind}[/] [dim]{target}[/]  {status}{dur}")
+        if preview:
+            for line in preview.splitlines()[:6]:
+                self.write(f"│  [dim]{line}[/]")
+        self.write("└─")
+        self.write("")
+
+    def add_success(self, text: str) -> None:
+        self.write(f"[green]✓[/] {text}")
         self.write("")
 
     def add_error(self, text: str) -> None:

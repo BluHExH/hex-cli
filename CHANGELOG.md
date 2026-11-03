@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.1 — Three-column workspace TUI
+
+- Left / center / right layout matching professional coding-agent structure
+- Tool execution cards, changes & activity rails, context meter
+- Composer toolbar + Enter submit
+- SVG screenshots under docs/screenshots/
+
+# Changelog
+
 ## 2.1.0 — TUI/UX redesign
 
 - Professional layout: header, sidebar, home, timeline, composer, status

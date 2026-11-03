@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from textual.app import App, ComposeResult
@@ -19,27 +20,26 @@ from hex_cli.tools.registry import ToolRegistry
 from hex_cli.tui.theme import HEX_THEME_CSS
 from hex_cli.tui.widgets.composer import PromptComposer
 from hex_cli.tui.widgets.header import AppHeader
-from hex_cli.tui.widgets.home import HomeScreen
+from hex_cli.tui.widgets.left_rail import LeftRail
 from hex_cli.tui.widgets.palette import CommandPalette
-from hex_cli.tui.widgets.sidebar import SessionSidebar
+from hex_cli.tui.widgets.right_rail import RightRail
 from hex_cli.tui.widgets.status import StatusBar
 from hex_cli.tui.widgets.timeline import ConversationTimeline
 
 
 class HexApp(App[None]):
-    """HEX CLI 2.1 professional coding-agent TUI."""
+    """Three-column HEX coding workspace (OpenCode-structure layout, HEX brand)."""
 
     CSS = HEX_THEME_CSS
     TITLE = f"HEX CLI {__version__}"
 
     BINDINGS = [
         Binding("ctrl+n", "new_session", "New", show=True),
-        Binding("ctrl+b", "toggle_sidebar", "Sidebar", show=True),
-        Binding("ctrl+p", "command_palette", "Palette", show=True),
-        Binding("ctrl+l", "focus_composer", "Composer", show=False),
-        Binding("ctrl+c", "cancel_or_quit", "Cancel", show=True),
+        Binding("ctrl+b", "toggle_left", "Left", show=True),
+        Binding("ctrl+l", "toggle_right", "Right", show=True),
+        Binding("ctrl+p", "palette", "Palette", show=True),
         Binding("ctrl+q", "quit", "Quit", show=True),
-        Binding("question_mark", "show_help", "Help", show=False),
+        Binding("escape", "cancel_or_idle", "Cancel", show=True),
     ]
 
     def __init__(self, workspace: Path | None = None) -> None:
@@ -48,7 +48,7 @@ class HexApp(App[None]):
         self.settings = load_settings(self.workspace)
         self.settings.workspace = str(self.workspace)
         self.store = SessionStore(self.workspace)
-        self.session: Session = self.store.create(title="Main")
+        self.session: Session = self.store.create(title="Session 1")
         self.history: list[ChatMessage] = []
         self.changes = ChangeLog()
         gate = PermissionGate(mode=self.settings.permission_mode)
@@ -56,149 +56,163 @@ class HexApp(App[None]):
         self.provider = create_provider(self.settings)
         self.runner = AgentRunner(self.provider, self.tools, self.settings, self.changes)
         self._busy = False
-        self._show_home = True
+        self._started = datetime.now()
+        self._activities: list[tuple[str, str, bool]] = []
+        self._ctx_chars = 0
 
     def compose(self) -> ComposeResult:
         yield AppHeader()
-        with Horizontal(id="main-row"):
-            yield SessionSidebar()
-            with Vertical(id="content-col"):
-                yield HomeScreen()
+        with Horizontal(id="body"):
+            yield LeftRail()
+            with Vertical(id="center"):
+                yield Static(f"  Session 1   +", id="session-tabs")
                 yield ConversationTimeline()
-                with Vertical(id="composer-wrap"):
-                    yield PromptComposer()
+                yield PromptComposer()
+            yield RightRail()
         yield StatusBar()
 
     def on_mount(self) -> None:
-        self._refresh_chrome()
-        self.query_one(ConversationTimeline).display = False
-        self.query_one(HomeScreen).show(
-            workspace=str(self.workspace),
-            provider=self.settings.provider,
-            model=self.settings.model,
-            sessions=self._session_pairs(),
+        self.query_one(ConversationTimeline).show_welcome(
+            f"{self.settings.provider}/{self.settings.model}"
         )
-        self.query_one(PromptComposer).focus()
-        self._adapt_layout()
+        self._refresh_all()
+        self.query_one(PromptComposer).set_permission_label(self.settings.permission_mode)
+        self.query_one(PromptComposer).focus_input()
+        self._adapt()
 
     def on_resize(self, event) -> None:  # noqa: ANN001
-        self._adapt_layout()
+        self._adapt()
 
-    def _adapt_layout(self) -> None:
-        """Hide sidebar on narrow terminals."""
-        sidebar = self.query_one(SessionSidebar)
-        if self.size.width < 100:
-            sidebar.display = False
-        elif not sidebar._collapsed:
-            sidebar.display = True
+    def _adapt(self) -> None:
+        left = self.query_one(LeftRail)
+        right = self.query_one(RightRail)
+        w = self.size.width
+        if w < 90:
+            left.display = False
+            right.display = False
+        elif w < 120:
+            left.display = not left._collapsed
+            right.display = False
+        else:
+            left.display = not left._collapsed
+            right.display = not right._collapsed
 
-    def _session_pairs(self) -> list[tuple[str, str]]:
-        return [(s.id, s.title) for s in self.store.list()[:8]]
+    def _recent_files(self) -> list[str]:
+        files: list[str] = []
+        try:
+            for p in sorted(self.workspace.rglob("*")):
+                if p.is_file() and not any(part.startswith(".") for part in p.parts):
+                    files.append(str(p.relative_to(self.workspace)))
+                if len(files) >= 6:
+                    break
+        except OSError:
+            pass
+        return files
 
-    def _refresh_chrome(self) -> None:
-        status = "working" if self._busy else "idle"
-        self.query_one(AppHeader).update_meta(
-            workspace=self.workspace.name,
-            session=self.session.id,
-            provider=self.settings.provider,
-            model=self.settings.model,
-            status=status,
-        )
-        self.query_one(SessionSidebar).set_content(
-            session_id=self.session.id,
-            session_title=self.session.title,
+    def _change_rows(self) -> list[tuple[str, str]]:
+        rows: list[tuple[str, str]] = []
+        for c in self.changes.items[-12:]:
+            before_len = len(c.before or "")
+            after_len = len(c.after or "")
+            delta = after_len - before_len
+            sign = f"+{delta}" if delta >= 0 else str(delta)
+            rows.append((c.path, sign))
+        return rows
+
+    def _refresh_all(self) -> None:
+        model = f"{self.settings.provider}/{self.settings.model}"
+        self.query_one(AppHeader).set_meta(
             workspace=str(self.workspace),
-            provider=self.settings.provider,
             model=self.settings.model,
+            provider=self.settings.provider,
+            agent_status="Working" if self._busy else "Agent",
+        )
+        self.query_one(LeftRail).set_data(
+            workspace=str(self.workspace),
+            context_chars=self._ctx_chars,
+            context_max=self.settings.context_max_chars,
+            tool_count=len(self.tools.schemas()),
             permission_mode=self.settings.permission_mode,
-            change_count=len(self.changes.items),
-            sessions=self._session_pairs(),
+            recent_files=self._recent_files(),
+        )
+        elapsed = datetime.now() - self._started
+        mins, secs = divmod(int(elapsed.total_seconds()), 60)
+        self.query_one(RightRail).set_data(
+            changes=self._change_rows(),
+            activities=list(self._activities[-12:]),
+            model=model,
+            context_line=f"{self._ctx_chars // 1000}K / {self.settings.context_max_chars // 1000}K",
+            started=self._started.strftime("%H:%M"),
+            duration=f"{mins}m {secs}s",
+            auto_save=True,
         )
         self.query_one(StatusBar).set_status(
-            state=status,
-            model=f"{self.settings.provider}/{self.settings.model}",
-            session=self.session.id,
-            workspace=self.workspace.name,
+            ready=not self._busy,
+            model=model,
+            workspace=str(self.workspace),
         )
-
-    def _ensure_conversation_view(self) -> None:
-        if self._show_home:
-            self._show_home = False
-            self.query_one(HomeScreen).display = False
-            self.query_one(ConversationTimeline).display = True
+        tabs = self.query_one("#session-tabs", Static)
+        tabs.update(f"  [bold]{self.session.title or 'Session'}[/]  [dim]{self.session.id}[/]   +")
 
     def action_new_session(self) -> None:
         if self._busy:
             return
-        self.session = self.store.create(title="New session")
+        self.session = self.store.create(title="Session")
         self.history.clear()
         self.changes = ChangeLog()
         self.runner.changes = self.changes
-        timeline = self.query_one(ConversationTimeline)
-        timeline.clear()
-        self._show_home = True
-        self.query_one(HomeScreen).display = True
-        self.query_one(HomeScreen).show(
-            workspace=str(self.workspace),
-            provider=self.settings.provider,
-            model=self.settings.model,
-            sessions=self._session_pairs(),
-        )
-        timeline.display = False
-        self._refresh_chrome()
-        self.query_one(PromptComposer).focus()
+        self._activities.clear()
+        self._ctx_chars = 0
+        self._started = datetime.now()
+        tl = self.query_one(ConversationTimeline)
+        tl.clear()
+        tl.show_welcome(f"{self.settings.provider}/{self.settings.model}")
+        self._refresh_all()
+        self.query_one(PromptComposer).focus_input()
 
-    def action_toggle_sidebar(self) -> None:
-        self.query_one(SessionSidebar).toggle()
-        self._adapt_layout()
+    def action_toggle_left(self) -> None:
+        self.query_one(LeftRail).toggle()
+        self._adapt()
 
-    def action_focus_composer(self) -> None:
-        self.query_one(PromptComposer).focus()
+    def action_toggle_right(self) -> None:
+        self.query_one(RightRail).toggle()
+        self._adapt()
 
-    def action_command_palette(self) -> None:
-        def _done(cmd: str | None) -> None:
+    def action_palette(self) -> None:
+        def done(cmd: str | None) -> None:
             if not cmd:
                 return
-            actions = {
+            {
                 "new_session": self.action_new_session,
-                "toggle_sidebar": self.action_toggle_sidebar,
-                "focus_composer": self.action_focus_composer,
-                "cancel": self.action_cancel_or_quit,
-                "help": self.action_show_help,
+                "toggle_left": self.action_toggle_left,
+                "toggle_right": self.action_toggle_right,
+                "focus_composer": lambda: self.query_one(PromptComposer).focus_input(),
+                "cancel": self.action_cancel_or_idle,
                 "quit": self.action_quit,
-            }
-            fn = actions.get(cmd)
-            if fn:
-                fn()
+            }.get(cmd, lambda: None)()
 
-        self.push_screen(CommandPalette(), _done)
+        self.push_screen(CommandPalette(), done)
 
-    def action_show_help(self) -> None:
-        timeline = self.query_one(ConversationTimeline)
-        self._ensure_conversation_view()
-        timeline.add_system(
-            "Shortcuts: Ctrl+Enter send · Ctrl+N new · Ctrl+B sidebar · "
-            "Ctrl+P palette · Ctrl+C cancel · Ctrl+Q quit · Ctrl+L composer"
-        )
-
-    def action_cancel_or_quit(self) -> None:
+    def action_cancel_or_idle(self) -> None:
         if self._busy:
             self.runner.request_cancel()
             self.query_one(ConversationTimeline).add_system("Cancel requested…")
-            return
-        self.exit()
 
     def on_prompt_composer_submitted(self, event: PromptComposer.Submitted) -> None:
         text = event.text.strip()
         if not text or self._busy:
             return
-        self._ensure_conversation_view()
-        timeline = self.query_one(ConversationTimeline)
-        timeline.add_user(text)
+        now = datetime.now().strftime("%-I:%M %p") if hasattr(datetime, "strftime") else ""
+        try:
+            now = datetime.now().strftime("%H:%M")
+        except Exception:
+            now = ""
+        tl = self.query_one(ConversationTimeline)
+        tl.add_user(text, now)
         self._busy = True
         self.query_one(PromptComposer).set_busy(True)
-        self._refresh_chrome()
-        self.run_worker(self._run_turn(text), exclusive=True, thread=True)
+        self._refresh_all()
+        self.run_worker(lambda: self._run_turn(text), exclusive=True, thread=True)
 
     def _run_turn(self, text: str) -> None:
         try:
@@ -208,28 +222,50 @@ class HexApp(App[None]):
             self.call_from_thread(self._apply_error, str(exc))
 
     def _apply_result(self, result) -> None:
-        timeline = self.query_one(ConversationTimeline)
+        tl = self.query_one(ConversationTimeline)
         self.history = [m for m in result.messages if m.role in {"user", "assistant", "tool", "system"}]
+        self._ctx_chars = sum(len(m.content) for m in self.history)
         for ev in result.tool_events:
-            timeline.add_tool(ev["tool"], bool(ev["ok"]), ev.get("output") or ev.get("error") or "")
-        timeline.add_assistant(result.assistant_text, cancelled=bool(result.cancelled))
-        if not self.session.title or self.session.title in {"Main", "New session"}:
-            self.session.title = result.messages[0].content[:40] if result.messages else self.session.title
+            name = ev["tool"]
+            ok = bool(ev["ok"])
+            detail = (ev.get("output") or ev.get("error") or "")[:400]
+            kind = {
+                "read_file": "Read",
+                "write_file": "Edit",
+                "run_shell": "Terminal",
+                "list_dir": "List",
+                "search_files": "Search",
+            }.get(name, name)
+            self._activities.append((kind, "done" if ok else "err", ok))
+            tl.add_tool_card(kind, name, ok, preview=detail)
+        now = datetime.now().strftime("%H:%M")
+        if result.tool_events and not result.cancelled:
+            tl.add_planning(len(result.tool_events), "Tool steps completed.")
+        tl.add_assistant(result.assistant_text, now, cancelled=bool(result.cancelled))
+        if result.assistant_text and not result.cancelled:
+            # light success cue when tools ran
+            if result.tool_events and all(e["ok"] for e in result.tool_events):
+                tl.add_success("Turn completed.")
         self.session.messages = [
             {"role": m.role, "content": m.content} for m in self.history if m.role in {"user", "assistant"}
         ]
+        if self.session.title in {"Session", "Session 1", "Main", "New session"} and self.history:
+            for m in self.history:
+                if m.role == "user":
+                    self.session.title = m.content[:48]
+                    break
         try:
             self.store.save(self.session)
         except OSError as exc:
-            timeline.add_error(f"Session save failed: {exc}")
+            tl.add_error(f"save failed: {exc}")
         self._busy = False
         self.query_one(PromptComposer).set_busy(False)
-        self._refresh_chrome()
-        self.query_one(PromptComposer).focus()
+        self._refresh_all()
+        self.query_one(PromptComposer).focus_input()
 
     def _apply_error(self, message: str) -> None:
         self.query_one(ConversationTimeline).add_error(message)
         self._busy = False
         self.query_one(PromptComposer).set_busy(False)
-        self._refresh_chrome()
-        self.query_one(PromptComposer).focus()
+        self._refresh_all()
+        self.query_one(PromptComposer).focus_input()

@@ -1,169 +1,140 @@
-"""Central HEX TUI design tokens (Textual CSS variables)."""
+"""HEX TUI theme — dark workspace matching professional coding-agent density."""
 
 HEX_THEME_CSS = """
-/* === HEX design tokens === */
-$hex-bg: #0b0f14;
-$hex-bg-elevated: #111820;
-$hex-bg-panel: #0e141c;
-$hex-border: #1e2a38;
-$hex-border-focus: #7c6aef;
-$hex-text: #e6edf3;
-$hex-muted: #8b9bb0;
-$hex-accent: #a78bfa;
-$hex-accent-2: #38bdf8;
-$hex-user: #7dd3fc;
-$hex-assistant: #c4b5fd;
-$hex-tool: #fbbf24;
-$hex-error: #f87171;
-$hex-ok: #34d399;
-$hex-surface: #151c27;
+$bg: #0c0f14;
+$panel: #10151c;
+$panel-2: #141a22;
+$border: #1c2430;
+$border-soft: #243041;
+$text: #e8eef7;
+$muted: #8b9bb0;
+$accent: #8b7cf7;
+$accent-2: #5b8def;
+$user: #9ecbff;
+$ok: #3ecf8e;
+$warn: #e6b84d;
+$err: #f07178;
+$chip: #1a2230;
 
-Screen {
-    background: $hex-bg;
-    color: $hex-text;
-}
+Screen { background: $bg; color: $text; }
 
-#app-header {
+/* —— Header —— */
+#top-header {
     dock: top;
-    height: 3;
-    background: $hex-bg-elevated;
-    border-bottom: solid $hex-border;
+    height: 1;
+    background: #0a0d12;
+    color: $muted;
     padding: 0 1;
+    border-bottom: solid $border;
 }
 
-#app-header .brand {
-    color: $hex-accent;
-    text-style: bold;
-}
-
-#app-header .meta {
-    color: $hex-muted;
-}
-
-#main-row {
+/* —— Body three columns —— */
+#body {
     height: 1fr;
 }
 
-#sidebar {
-    width: 28;
-    background: $hex-bg-panel;
-    border-right: solid $hex-border;
+#left-rail {
+    width: 26;
+    background: $panel;
+    border-right: solid $border;
     padding: 1 1;
 }
 
-#sidebar.collapsed {
+#center {
+    width: 1fr;
+    background: $bg;
+}
+
+#right-rail {
+    width: 30;
+    background: $panel;
+    border-left: solid $border;
+    padding: 1 1;
+}
+
+#left-rail.collapsed, #right-rail.collapsed {
     width: 0;
     padding: 0;
     border: none;
 }
 
-#sidebar .section-title {
-    color: $hex-accent;
+.rail-title {
+    color: $accent;
     text-style: bold;
-    margin-top: 1;
+    margin-bottom: 0;
 }
 
-#sidebar .muted {
-    color: $hex-muted;
+.rail-muted { color: $muted; }
+.rail-item { color: $text; }
+.rail-ok { color: $ok; }
+
+/* —— Session tabs —— */
+#session-tabs {
+    height: 1;
+    background: $panel-2;
+    border-bottom: solid $border;
+    padding: 0 1;
+    color: $muted;
 }
 
-#content-col {
-    width: 1fr;
-}
-
+/* —— Timeline —— */
 #timeline {
     height: 1fr;
     padding: 1 2;
-    background: $hex-bg;
-    scrollbar-background: $hex-bg;
-    scrollbar-color: $hex-border;
+    scrollbar-background: $bg;
+    scrollbar-color: $border-soft;
 }
 
-#home-panel {
-    height: 1fr;
-    padding: 2 3;
-    background: $hex-bg;
-}
-
-#home-panel .hero {
-    color: $hex-accent;
-    text-style: bold;
-}
-
-#home-panel .welcome {
-    color: $hex-text;
-    margin-top: 1;
-}
-
-#home-panel .hint {
-    color: $hex-muted;
-    margin-top: 1;
-}
-
-#composer-wrap {
-    dock: bottom;
+/* —— Composer —— */
+#composer-dock {
     height: auto;
     min-height: 5;
-    max-height: 12;
-    background: $hex-bg-elevated;
-    border-top: solid $hex-border;
+    max-height: 10;
+    background: $panel-2;
+    border-top: solid $border;
     padding: 0 1 1 1;
 }
 
-#composer {
+#composer-box {
     height: 3;
-    min-height: 3;
-    background: $hex-surface;
-    border: solid $hex-border;
+    background: $chip;
+    border: solid $border-soft;
     padding: 0 1;
 }
 
-#composer:focus {
-    border: solid $hex-border-focus;
+#composer-box:focus-within {
+    border: solid $accent;
 }
 
-#status-bar {
+#composer-toolbar {
+    height: 1;
+    color: $muted;
+    padding: 0 1;
+}
+
+/* —— Status —— */
+#bottom-status {
     dock: bottom;
     height: 1;
-    background: #070a0e;
-    color: $hex-muted;
+    background: #080a0e;
+    color: $muted;
     padding: 0 1;
+    border-top: solid $border;
 }
 
-.msg-user {
+/* —— Welcome card —— */
+.welcome-card {
+    background: $panel-2;
+    border: solid $border-soft;
+    padding: 1 2;
     margin: 1 0;
-    color: $hex-user;
 }
 
-.msg-assistant {
-    margin: 1 0;
-    color: $hex-text;
-}
-
-.msg-tool {
-    margin: 0 0;
-    color: $hex-tool;
-    background: $hex-surface;
+/* —— Tool card —— */
+.tool-card {
+    background: $panel-2;
+    border-left: tall $accent-2;
     padding: 0 1;
-    border-left: tall $hex-tool;
-}
-
-.msg-error {
-    color: $hex-error;
-    margin: 1 0;
-}
-
-.msg-system {
-    color: $hex-muted;
-    text-style: italic;
-}
-
-.tool-header {
-    color: $hex-tool;
-    text-style: bold;
-}
-
-.tool-body {
-    color: $hex-muted;
+    margin: 0 0 1 0;
 }
 """

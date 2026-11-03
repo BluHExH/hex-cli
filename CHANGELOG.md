@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.1.0 — TUI/UX redesign
+
+- Professional layout: header, sidebar, home, timeline, composer, status
+- Design tokens theme system
+- Command palette (Ctrl+P)
+- Responsive sidebar
+- Multiline composer (Ctrl+Enter)
+- Backend unchanged from 2.0.1
+
 ## 2.0.1 — Release stabilization
 
 - Fix console entry point: `hex_cli.main:main`

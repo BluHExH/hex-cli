@@ -1,4 +1,4 @@
-# HEX CLI 2.0.1
+# HEX CLI 2.1.0
 
 Native **terminal** AI coding agent for software development.
 
@@ -72,8 +72,8 @@ hex --permission allow "READ README.md"
 
 ## MCP / LSP
 
-- **MCP:** interface placeholder only — **not** an operational MCP runtime in 2.0.1
-- **LSP:** not included in 2.0.1
+- **MCP:** interface placeholder only — **not** an operational MCP runtime in 2.1.0
+- **LSP:** not included in 2.1.0
 
 ## Tests
 
@@ -94,4 +94,8 @@ See `docs/ARCHITECTURE.md`.
 
 ## Version
 
-**2.0.1** — packaging, docs, shell safety, cancellation, TUI workers
+**2.1.0** — packaging, docs, shell safety, cancellation, TUI workers
+
+## TUI (2.1)
+
+Professional layout with header, sidebar, home screen, conversation timeline, multiline composer (Ctrl+Enter), status bar, and Ctrl+P command palette. See `docs/HEX_CLI_2.1.0_UI_REDESIGN.md`.

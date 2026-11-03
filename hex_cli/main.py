@@ -14,6 +14,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--workspace", type=str, default=".", help="Project workspace root")
     parser.add_argument("--log-level", type=str, default="WARNING")
     parser.add_argument(
+        "--permission",
+        choices=["allow", "deny", "prompt"],
+        default=None,
+        help="Override permission mode for headless runs",
+    )
+    parser.add_argument(
         "prompt",
         nargs="?",
         default=None,
@@ -33,8 +39,9 @@ def main(argv: list[str] | None = None) -> int:
 
         settings = load_settings(workspace)
         settings.workspace = str(workspace)
-        settings.permission_mode = "allow"
-        gate = PermissionGate(mode="allow")
+        mode = args.permission or settings.permission_mode or "allow"
+        settings.permission_mode = mode
+        gate = PermissionGate(mode=mode)
         tools = ToolRegistry(workspace, gate)
         provider = create_provider(settings)
         runner = AgentRunner(provider, tools, settings, ChangeLog())

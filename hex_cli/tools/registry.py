@@ -27,7 +27,7 @@ class ToolRegistry:
             "write_file": lambda a: self.fs.write_file(a["path"], a.get("content", "")),
             "list_dir": lambda a: self.fs.list_dir(a.get("path", ".")),
             "search_files": lambda a: self.fs.search_files(a["pattern"], a.get("path", ".")),
-            "run_shell": lambda a: self.shell.run(a["command"]),
+            "run_shell": lambda a: self.shell.run(a["command"], use_shell=bool(a.get("use_shell", False))),
         }
 
     def schemas(self) -> list[dict[str, Any]]:

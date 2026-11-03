@@ -1,20 +1,16 @@
 # Changelog
 
-## 1.0.0
+## 2.0.1 — Release stabilization
 
-- Large ASCII HEX welcome in the main workspace
-- Real activity indicator (spinner + phase from agent/tool events)
-- Stop button during generation (and Ctrl+.)
-- Streaming hooks + tool status cards remain driven by the live agent
-- Offline identity (NeonBuild / Powered by HEX) preserved
+- Fix console entry point: `hex_cli.main:main`
+- Align package/runtime version to **2.0.1**
+- Rewrite README for actual 2.0 architecture
+- Shell: default `shell=False` argv execution; explicit `use_shell`; cancel/timeout
+- Cooperative agent cancellation + shell process terminate
+- TUI: threaded workers; Ctrl+C cancels in-flight turn
+- Textual moved to optional `[tui]` / `[dev]` extra
+- Version consistency regression test
 
-## 0.9.0
+## 2.0.0 — Clean architecture rebuild
 
-- Offline identity knowledge module
-- Selectable /provider picker
-- Cleaner welcome branding
-
-## 0.8.0
-
-- Enter-to-send via PromptTextArea priority bindings
-- Send button and mouse-oriented sidebar controls
+- Modular agent, providers, tools, permissions, sessions, changes, TUI core

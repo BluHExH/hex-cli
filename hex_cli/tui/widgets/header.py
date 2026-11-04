@@ -1,31 +1,28 @@
 from __future__ import annotations
 
+from textual.app import ComposeResult
+from textual.containers import Horizontal
 from textual.widgets import Static
 
-from hex_cli import __version__
 
+class AppHeader(Horizontal):
+    """OpenCode session header: `# title` left, tokens · ctx% · cost right."""
 
-class AppHeader(Static):
-    """Full-width top bar: brand | path | model · Agent."""
+    def __init__(self, **kwargs) -> None:  # noqa: ANN003
+        super().__init__(id="top-header", **kwargs)
 
-    def __init__(self) -> None:
-        super().__init__(id="top-header")
+    def compose(self) -> ComposeResult:
+        yield Static("", id="hdr-title")
+        yield Static("", id="hdr-stats")
 
     def set_meta(
         self,
         *,
-        workspace: str,
-        model: str,
-        provider: str,
-        agent_status: str = "Agent",
-        branch: str = "",
-        commits: int = 0,
+        title: str,
+        tokens: int = 0,
+        pct: int = 0,
+        cost: str = "$0.00",
     ) -> None:
-        # Reference: left brand · center path | branch · right model + Agent
-        path = workspace if len(workspace) < 44 else "…" + workspace[-42:]
-        branch_part = f" [dim]│[/] [dim]⎇[/] [dim]{branch}[/] [dim]{commits}[/]" if branch else ""
-        self.update(
-            f"[bold #a78bfa]⬡ HEX[/] [dim]CLI[/]          "
-            f"[dim]{path}[/]{branch_part}                    "
-            f"[green]●[/] {provider}/{model}   [green]●[/] {agent_status}   [dim]⚙[/]"
-        )
+        label = (title[:56] + "…") if len(title) > 57 else title
+        self.query_one("#hdr-title", Static).update(f"[bold]# {label}[/]")
+        self.query_one("#hdr-stats", Static).update(f"{tokens:,}  {pct}%  ({cost})")

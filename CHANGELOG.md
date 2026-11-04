@@ -1,5 +1,21 @@
 # Changelog
 
+## 2.2.0 — OpenCode v2 TUI reskin
+
+- Rebuilt TUI to mirror the real OpenCode v2 terminal UI (single-column, OpenCode black/blue palette):
+  - Session header `# title` with live tokens · context % · cost stats
+  - User messages as blue-left-bar blocks; assistant replies as plain text
+  - Tool lines in OpenCode style: `* Glob "src" (2 entries)`, `* Write "…" (46 chars)`, errors as `! …`
+  - Composer block with `Build · model · HEX` row; Tab cycles **Build ⇄ Plan** (Plan denies writes/shell via gate wrapper)
+  - Hint line: `· dots ·  esc interrupt ·  tab agents  ctrl+p commands  ctrl+n new session`
+- Slash commands mirroring OpenCode TUI docs: `/new /clear /sessions /models /undo /compact /summarize /details /help /exit` (+ aliases `/resume /continue /q`)
+  - Type-ahead hint popup above the composer while typing `/`
+- Ctrl+P searchable command dialog; Sessions dialog; Models dialog
+- `!` prefix runs shell commands through the tool pipeline; result recorded to history
+- `/undo` removes the last exchange; `/compact` runs real context compaction; `/details` toggles tool lines (replay-based)
+- `ChatMessage.meta` carries tool args so replay renders exact tool lines
+- Old three-column rails removed; screenshots regenerated for the new layout
+
 ## 2.1.3 — Reference fidelity hardening
 
 - Header renders real git state: branch chip `⎇ <branch> <count>` bound to the app workspace (cwd fix)

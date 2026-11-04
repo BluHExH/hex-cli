@@ -1,4 +1,4 @@
-# HEX CLI 2.1.3
+# HEX CLI 2.2.0
 
 Native **terminal** AI coding agent for software development.
 
@@ -94,8 +94,8 @@ See `docs/ARCHITECTURE.md`.
 
 ## Version
 
-**2.1.3** — reference fidelity hardening: live git branch chip, real tool durations, header/status render fix, multi-turn mock fix
+**2.2.0** — OpenCode v2 TUI reskin: single-column conversation, slash commands, Build/Plan agents, sessions/models/commands dialogs, `!` shell prefix
 
-## TUI (2.1)
+## TUI (2.2)
 
-Professional layout with header, sidebar, home screen, conversation timeline, multiline composer (Ctrl+Enter), status bar, and Ctrl+P/Ctrl+K command palette. See `docs/HEX_CLI_2.1.2_UI_REDESIGN.md` and `docs/HEX_CLI_2.1.3_REFERENCE_FIDELITY.md`.
+OpenCode v2-style single-column agent TUI: session header with token/context/cost stats, blue-bar user messages, grey tool lines (`* Glob "src" (2 entries)`), composer with `Build · model` row, hint/status line, plus `/new /sessions /models /undo /compact /details /help` and `!shell` prefix. Tab cycles Build ⇄ Plan (Plan is read-only). See `docs/HEX_CLI_2.2.0_OPENCODE_TUI.md`.

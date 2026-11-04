@@ -4,15 +4,14 @@ from textual.widgets import Static
 
 
 class StatusBar(Static):
-    """Bottom bar: brand · Ready · model · path · shortcuts (reference order)."""
+    """OpenCode-style hint line: dots + esc interrupt · tab agents · ctrl+p commands."""
 
-    def __init__(self) -> None:
-        super().__init__(id="bottom-status")
+    def __init__(self, **kwargs) -> None:  # noqa: ANN003
+        super().__init__(id="bottom-status", **kwargs)
 
-    def set_status(self, *, ready: bool, model: str, workspace: str) -> None:
-        state = "[green]●[/] Ready" if ready else "[yellow]●[/] Working"
-        path = workspace if len(workspace) < 34 else "…" + workspace[-32:]
+    def set_status(self, *, ready: bool, model: str = "", workspace: str = "") -> None:
+        left = "[dim]· · · · · ·[/]  esc interrupt" if not ready else "[dim]· · · · · ·[/]"
         self.update(
-            f"[bold #a78bfa]⬡ HEX[/]   {state}   [green]●[/] {model}   [dim]⌂[/] [dim]{path}[/]"
-            f"        [dim]Ctrl+K Command Palette   Ctrl+L Sidebar   Ctrl+Enter Submit   Esc Cancel[/]"
+            f"{left}    "
+            f"[dim]tab[/] agents   [dim]ctrl+p[/] commands   [dim]ctrl+n[/] new session"
         )

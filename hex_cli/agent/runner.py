@@ -104,6 +104,7 @@ class AgentRunner:
                                 "output": result.output,
                                 "error": result.error,
                                 "duration": duration,
+                                "args": {k: str(v) for k, v in call.arguments.items() if k in {"path", "pattern", "command"}},
                             }
                         )
                         messages.append(
@@ -112,6 +113,7 @@ class AgentRunner:
                                 content=result.output if result.ok else result.error,
                                 name=call.name,
                                 tool_call_id=call.id,
+                                meta={k: str(v) for k, v in call.arguments.items() if isinstance(v, (str, int))},
                             )
                         )
                     continue

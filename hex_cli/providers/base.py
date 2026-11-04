@@ -10,6 +10,7 @@ class ChatMessage:
     content: str
     tool_call_id: str | None = None
     name: str | None = None
+    meta: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
